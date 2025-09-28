@@ -53,6 +53,7 @@ $form_facility = 0 + empty($_REQUEST['form_facility']) ? 0 : $_REQUEST['form_fac
 $form_show_empty = empty($_REQUEST['form_show_empty']) ? 0 : 1;
 $form_show_inactive = empty($_REQUEST['form_show_inactive']) ? 0 : 1;
 $form_consumable = isset($_REQUEST['form_consumable']) ? intval($_REQUEST['form_consumable']) : 0;
+$form_category = isset($_REQUEST['form_category']) ? trim($_REQUEST['form_category']) : '';
 
 // Incoming form_warehouse, if not empty is in the form "warehouse/facility".
 // The facility part is an attribute used by JavaScript logic.
@@ -73,6 +74,10 @@ if ($form_facility) {
 if ($form_warehouse) {
     $where .= " AND di.warehouse_id IS NOT NULL AND di.warehouse_id = ?";
     $binds[] = $form_warehouse;
+}
+if ($form_category !== '') {
+    $where .= " AND d.aesthetic_category = ?";
+    $binds[] = $form_category;
 }
 if (!$form_show_inactive) {
     $where .= " AND d.active = 1";
@@ -147,6 +152,8 @@ function mapToTable($row): void
         } else {
             echo "  <td>" . text($row['name']) . "</td>\n";
         }
+        $category = empty($row['aesthetic_category']) ? xlt('Uncategorized') : $row['aesthetic_category'];
+        echo "  <td>" . text($category) . "</td>\n";
         echo "  <td>" . ($row['active'] ? xlt('Yes') : xlt('No')) . "</td>\n";
         echo "  <td>" . ($row['consumable'] ? xlt('Yes') : xlt('No')) . "</td>\n";
         echo "  <td>" . text($row['ndc_number']) . "</td>\n";
@@ -195,17 +202,40 @@ function mapToTable($row): void
             }
             echo "</td>\n<td>";
 
+            $totalOnHand = 0;
             foreach ($row['on_hand'] as $value) {
-                $value = $value != null ? $value : "N/A";
-                echo "<div >" . text($value) . "</div>";
+                if (is_numeric($value)) {
+                    $totalOnHand += (float)$value;
+                }
+            }
+            $reorderPoint = isset($row['reorder_point']) ? (float)$row['reorder_point'] : 0.0;
+            $lowStock = $reorderPoint > 0 && $totalOnHand <= $reorderPoint;
+            echo "</td>\n<td" . ($lowStock ? " class='inventory-low-stock'" : "") . ">";
+            echo "<div class='inventory-total'>" . xlt('Total') . ': ' . text($totalOnHand) . "</div>";
+            foreach ($row['on_hand'] as $value) {
+                $displayValue = ($value !== null && $value !== '') ? $value : xl('N/A');
+                echo "<div>" . text($displayValue) . "</div>";
             }
             echo "</td>\n<td>";
 
             foreach ($row['expiration'] as $value) {
-                // Make the expiration date red if expired.
-                $expired = !empty($value) && strcmp($value, $today) <= 0;
-                $value = !empty($value) ? oeFormatShortDate($value) : xl('N/A');
-                echo "<div" . ($expired ? " style='color:red'" : "") . ">" . text($value) . "</div>";
+                $classes = [];
+                $label = xl('N/A');
+                if (!empty($value)) {
+                    $label = oeFormatShortDate($value);
+                    $expired = strcmp($value, $today) <= 0;
+                    if ($expired) {
+                        $classes[] = 'inventory-expired';
+                    } else {
+                        $future = strtotime($value);
+                        $threshold = strtotime('+30 days', strtotime($today));
+                        if ($future !== false && $future <= $threshold) {
+                            $classes[] = 'inventory-expiring';
+                        }
+                    }
+                }
+                $classAttr = empty($classes) ? '' : " class='" . attr(implode(' ', $classes)) . "'";
+                echo "<div$classAttr>" . text($label) . "</div>";
             }
             echo "</td>\n";
         } else {
@@ -242,6 +272,26 @@ a, a:visited, a:hover {
 
 .paginate_button:hover {
   background: transparent !important;
+}
+
+.inventory-low-stock {
+  background-color: #fff5f5;
+  border-left: 4px solid #c0392b;
+}
+
+.inventory-expiring {
+  color: #c77800;
+  font-weight: 600;
+}
+
+.inventory-expired {
+  color: #c0392b;
+  font-weight: 700;
+}
+
+.inventory-total {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
 }
 
 </style>
@@ -321,6 +371,23 @@ while ($frow = sqlFetchArray($fres)) {
 }
 echo "   </select>\n";
 
+// Build a drop-down list of aesthetic categories.
+echo "&nbsp;";
+$cres = sqlStatement(
+    "SELECT DISTINCT aesthetic_category FROM drugs WHERE aesthetic_category <> '' ORDER BY aesthetic_category"
+);
+echo "   <select name='form_category'>\n";
+echo "    <option value=''>" . xlt('All Categories') . "</option>\n";
+while ($crow = sqlFetchArray($cres)) {
+    $cat = $crow['aesthetic_category'];
+    echo "    <option value='" . attr($cat) . "'";
+    if ($cat === $form_category) {
+        echo " selected";
+    }
+    echo ">" . text($cat) . "</option>\n";
+}
+echo "   </select>\n";
+
 // Build a drop-down list of warehouses.
 echo "&nbsp;";
 echo "   <select name='form_warehouse'>\n";
@@ -386,6 +453,7 @@ foreach (
     <thead>
         <tr>
             <th><?php echo xlt('Name'); ?> </a></th>
+            <th><?php echo xlt('Category'); ?></th>
             <th><?php echo xlt('Act'); ?></th>
             <th><?php echo xlt('Cons'); ?></th>
             <th><?php echo xlt('NDC'); ?> </a></th>

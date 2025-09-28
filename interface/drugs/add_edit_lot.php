@@ -361,6 +361,10 @@ if (!empty($_POST['form_save'])) {
     $form_lot_number   = $_POST['form_lot_number'] ?? '';
     $form_manufacturer = $_POST['form_manufacturer'] ?? '';
     $form_vendor_id    = $_POST['form_vendor_id'] ?? '';
+    $form_aesthetic_category = $_POST['form_aesthetic_category'] ?? '';
+    $form_photo_url    = $_POST['form_photo_url'] ?? '';
+    $form_unit_cost    = sprintf('%0.2f', $_POST['form_unit_cost'] ?? 0);
+    $form_supplier_name = $_POST['form_supplier_name'] ?? '';
 
     if ($form_trans_type < 0 || $form_trans_type > 7) {
         die(xlt('Internal error!'));
@@ -457,6 +461,10 @@ if (!empty($_POST['form_save'])) {
                         "manufacturer = ?, " .
                         "expiration = ?, "  .
                         "vendor_id = ?, " .
+                        "aesthetic_category = ?, " .
+                        "photo_url = ?, " .
+                        "unit_cost = ?, " .
+                        "supplier_name = ?, " .
                         "warehouse_id = ?, " .
                         "on_hand = on_hand + ? "  .
                         "WHERE drug_id = ? AND inventory_id = ?",
@@ -465,6 +473,10 @@ if (!empty($_POST['form_save'])) {
                             $form_manufacturer,
                             (empty($form_expiration) ? "NULL" : $form_expiration),
                             $form_vendor_id,
+                            $form_aesthetic_category,
+                            $form_photo_url,
+                            $form_unit_cost,
+                            $form_supplier_name,
                             $form_warehouse_id,
                             $form_quantity,
                             $drug_id,
@@ -498,12 +510,16 @@ if (!empty($_POST['form_save'])) {
                     $lot_id = sqlInsert(
                         "INSERT INTO drug_inventory ( " .
                         "drug_id, lot_number, manufacturer, expiration, " .
-                        "vendor_id, warehouse_id, on_hand " .
+                        "vendor_id, aesthetic_category, photo_url, unit_cost, supplier_name, warehouse_id, on_hand " .
                         ") VALUES ( " .
                         "?, "                            .
                         "?, " .
                         "?, " .
                         "?, "  .
+                        "?, " .
+                        "?, " .
+                        "?, " .
+                        "?, " .
                         "?, " .
                         "?, " .
                         "? "  .
@@ -514,6 +530,10 @@ if (!empty($_POST['form_save'])) {
                             $form_manufacturer,
                             (empty($form_expiration) ? "NULL" : $form_expiration),
                             $form_vendor_id,
+                            $form_aesthetic_category,
+                            $form_photo_url,
+                            $form_unit_cost,
+                            $form_supplier_name,
                             $form_warehouse_id,
                             $form_quantity
                         )
@@ -651,12 +671,26 @@ foreach (
   </td>
  </tr>
 
- <tr id='row_manufacturer'>
-  <td class="text-nowrap align-top"><?php echo xlt('Manufacturer'); ?>:</td>
+<tr id='row_manufacturer'>
+ <td class="text-nowrap align-top"><?php echo xlt('Manufacturer'); ?>:</td>
+ <td>
+  <input class="form-control w-100" type='text' size='40' name='form_manufacturer' maxlength='250' value='<?php echo attr($row['manufacturer']) ?>' />
+ </td>
+</tr>
+
+<tr id='row_category'>
+  <td class="text-nowrap align-top"><?php echo xlt('Aesthetic Category'); ?>:</td>
   <td>
-   <input class="form-control w-100" type='text' size='40' name='form_manufacturer' maxlength='250' value='<?php echo attr($row['manufacturer']) ?>' />
+   <input class="form-control w-100" type='text' size='40' name='form_aesthetic_category' maxlength='63' value='<?php echo attr($row['aesthetic_category']) ?>' />
   </td>
- </tr>
+</tr>
+
+<tr id='row_photo'>
+  <td class="text-nowrap align-top"><?php echo xlt('Photo URL'); ?>:</td>
+  <td>
+   <input class="form-control w-100" type='url' name='form_photo_url' maxlength='255' value='<?php echo attr($row['photo_url']) ?>' />
+  </td>
+</tr>
 
  <tr id='row_expiration'>
   <td class="text-nowrap align-top"><?php echo xlt('Expiration'); ?>:</td>
@@ -704,9 +738,9 @@ while ($lrow = sqlFetchArray($lres)) {
   </td>
  </tr>
 
- <tr id='row_vendor'>
-  <td class="text-nowrap align-top"><?php echo xlt('Vendor'); ?>:</td>
-  <td>
+<tr id='row_vendor'>
+ <td class="text-nowrap align-top"><?php echo xlt('Vendor'); ?>:</td>
+ <td>
 <?php
 // Address book entries for vendors.
 generate_form_field(
@@ -716,8 +750,15 @@ generate_form_field(
     $row['vendor_id']
 );
 ?>
+ </td>
+</tr>
+
+<tr id='row_supplier_name'>
+  <td class="text-nowrap align-top"><?php echo xlt('Supplier Reference'); ?>:</td>
+  <td>
+   <input class="form-control w-100" type='text' size='40' name='form_supplier_name' maxlength='255' value='<?php echo attr($row['supplier_name']) ?>' />
   </td>
- </tr>
+</tr>
 
  <tr id='row_warehouse'>
   <td class="text-nowrap align-top" id="label_warehouse"><?php echo xlt('Warehouse'); ?>:</td>
@@ -744,12 +785,19 @@ if (
   </td>
  </tr>
 
- <tr id='row_quantity'>
-  <td class="text-nowrap align-top"><?php echo xlt('Quantity'); ?>:</td>
+<tr id='row_quantity'>
+ <td class="text-nowrap align-top"><?php echo xlt('Quantity'); ?>:</td>
+ <td>
+  <input class="form-control" type='text' size='5' name='form_quantity' maxlength='7' />
+ </td>
+</tr>
+
+<tr id='row_unit_cost'>
+  <td class="text-nowrap align-top"><?php echo xlt('Unit Cost'); ?>:</td>
   <td>
-   <input class="form-control" type='text' size='5' name='form_quantity' maxlength='7' />
+   <input class="form-control" type='number' step='0.01' min='0' name='form_unit_cost' value='<?php echo attr($row['unit_cost']) ?>' />
   </td>
- </tr>
+</tr>
 
  <tr id='row_cost'>
   <td class="text-nowrap align-top"><?php echo xlt('Total Cost'); ?>:</td>

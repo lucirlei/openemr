@@ -249,6 +249,10 @@ if ((!empty($_POST['form_save']) || !empty($_POST['form_delete'])) && !$alertmsg
                 "route = ?, " .
                 "cyp_factor = ?, " .
                 "related_code = ?, " .
+                "aesthetic_category = ?, " .
+                "photo_url = ?, " .
+                "unit_cost = ?, " .
+                "supplier_name = ?, " .
                 "dispensable = ?, " .
                 "allow_multiple = ?, " .
                 "allow_combining = ?, " .
@@ -268,6 +272,10 @@ if ((!empty($_POST['form_save']) || !empty($_POST['form_delete'])) && !$alertmsg
                     trim($_POST['form_route']),
                     trim($_POST['form_cyp_factor']),
                     trim($_POST['form_related_code']),
+                    trim($_POST['form_aesthetic_category']),
+                    trim($_POST['form_photo_url']),
+                    sprintf('%0.2f', $_POST['form_unit_cost'] ?? 0),
+                    trim($_POST['form_supplier_name']),
                     (empty($_POST['form_dispensable'    ]) ? 0 : 1),
                     (empty($_POST['form_allow_multiple' ]) ? 0 : 1),
                     (empty($_POST['form_allow_combining']) ? 0 : 1),
@@ -290,7 +298,7 @@ if ((!empty($_POST['form_save']) || !empty($_POST['form_delete'])) && !$alertmsg
         $drug_id = sqlInsert(
             "INSERT INTO drugs ( " .
             "name, ndc_number, drug_code, on_order, reorder_point, max_level, form, " .
-            "size, unit, route, cyp_factor, related_code, " .
+            "size, unit, route, cyp_factor, related_code, aesthetic_category, photo_url, unit_cost, supplier_name, " .
             "dispensable, allow_multiple, allow_combining, active, consumable " .
             ") VALUES ( " .
             "?, " .
@@ -323,6 +331,10 @@ if ((!empty($_POST['form_save']) || !empty($_POST['form_delete'])) && !$alertmsg
                 trim($_POST['form_route']),
                 trim($_POST['form_cyp_factor']),
                 trim($_POST['form_related_code']),
+                trim($_POST['form_aesthetic_category']),
+                trim($_POST['form_photo_url']),
+                sprintf('%0.2f', $_POST['form_unit_cost'] ?? 0),
+                trim($_POST['form_supplier_name']),
                 (empty($_POST['form_dispensable'    ]) ? 0 : 1),
                 (empty($_POST['form_allow_multiple' ]) ? 0 : 1),
                 (empty($_POST['form_allow_combining']) ? 0 : 1),
@@ -489,6 +501,16 @@ $title = $drug_id ? xl("Update Drug") : xl("Add Drug");
     </div>
 
     <div class="form-group mt-3">
+        <label><?php echo xlt('Aesthetic Category'); ?>:</label>
+        <input class="form-control w-100" name="form_aesthetic_category" maxlength="63" value='<?php echo attr($row['aesthetic_category'] ?? '') ?>' placeholder='<?php echo xla('Facial, Body, Injectable...'); ?>' />
+    </div>
+
+    <div class="form-group mt-3">
+        <label><?php echo xlt('Photo URL'); ?>:</label>
+        <input class="form-control w-100" type="url" name="form_photo_url" maxlength="255" value='<?php echo attr($row['photo_url'] ?? '') ?>' placeholder='https://example.com/image.jpg' />
+    </div>
+
+    <div class="form-group mt-3">
         <label><?php echo xlt('RXCUI Code'); ?>:</label>
         <input class="form-control w-100" type="text" size="50" name="form_drug_code" value='<?php echo attr($row['drug_code']) ?>'
              onclick='sel_related("?codetype=RXCUI&limit=1&target_element=form_drug_code")' title='<?php echo xla('Click to select RXCUI code'); ?>' data-toggle="tooltip" data-placement="top" readonly />
@@ -497,6 +519,16 @@ $title = $drug_id ? xl("Update Drug") : xl("Add Drug");
     <div class="form-group mt-3">
         <label><?php echo xlt('On Order'); ?>:</label>
         <input class="form-control" size="5" name="form_on_order" maxlength="7" value='<?php echo attr($row['on_order']) ?>' />
+    </div>
+
+    <div class="form-group mt-3">
+        <label><?php echo xlt('Default Cost'); ?>:</label>
+        <input class="form-control" type="number" step="0.01" min="0" name="form_unit_cost" value='<?php echo attr($row['unit_cost'] ?? '') ?>' />
+    </div>
+
+    <div class="form-group mt-3">
+        <label><?php echo xlt('Preferred Supplier'); ?>:</label>
+        <input class="form-control w-100" name="form_supplier_name" maxlength="255" value='<?php echo attr($row['supplier_name'] ?? '') ?>' />
     </div>
 
     <div class="form-group mt-3">
