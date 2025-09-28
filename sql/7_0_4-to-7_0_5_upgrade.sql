@@ -187,3 +187,64 @@ FROM `categories`
 WHERE `name` = 'Aesthetic Media'
 LIMIT 1;
 #EndIf
+
+#IfMissingColumn drugs aesthetic_category
+ALTER TABLE `drugs`
+    ADD COLUMN `aesthetic_category` varchar(63) NOT NULL DEFAULT '' COMMENT 'category grouping for aesthetic inventory';
+#EndIf
+
+#IfMissingColumn drugs photo_url
+ALTER TABLE `drugs`
+    ADD COLUMN `photo_url` varchar(255) NOT NULL DEFAULT '' COMMENT 'public URL or storage reference for product photos';
+#EndIf
+
+#IfMissingColumn drugs unit_cost
+ALTER TABLE `drugs`
+    ADD COLUMN `unit_cost` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT 'default internal cost per unit';
+#EndIf
+
+#IfMissingColumn drugs supplier_name
+ALTER TABLE `drugs`
+    ADD COLUMN `supplier_name` varchar(255) NOT NULL DEFAULT '' COMMENT 'preferred supplier for the product';
+#EndIf
+
+#IfMissingColumn drug_inventory aesthetic_category
+ALTER TABLE `drug_inventory`
+    ADD COLUMN `aesthetic_category` varchar(63) NOT NULL DEFAULT '' COMMENT 'category override for aesthetic workflows';
+#EndIf
+
+#IfMissingColumn drug_inventory photo_url
+ALTER TABLE `drug_inventory`
+    ADD COLUMN `photo_url` varchar(255) NOT NULL DEFAULT '' COMMENT 'lot-specific photo or documentation reference';
+#EndIf
+
+#IfMissingColumn drug_inventory unit_cost
+ALTER TABLE `drug_inventory`
+    ADD COLUMN `unit_cost` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT 'actual acquired cost per unit for the lot';
+#EndIf
+
+#IfMissingColumn drug_inventory supplier_name
+ALTER TABLE `drug_inventory`
+    ADD COLUMN `supplier_name` varchar(255) NOT NULL DEFAULT '' COMMENT 'supplier captured for the lot';
+#EndIf
+
+#IfNotTable procedure_products
+CREATE TABLE `procedure_products` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+    `code_type` varchar(31) NOT NULL COMMENT 'service code type (e.g. CPT4, HCPCS)',
+    `code` varchar(64) NOT NULL COMMENT 'service/procedure code',
+    `drug_id` int(11) NOT NULL COMMENT 'references drugs.drug_id',
+    `quantity` decimal(12,4) NOT NULL DEFAULT '1.0000' COMMENT 'inventory units to consume per service unit',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_procedure_products_code_drug` (`code_type`,`code`,`drug_id`),
+    KEY `idx_procedure_products_drug` (`drug_id`),
+    CONSTRAINT `procedure_products_ibfk_drug` FOREIGN KEY (`drug_id`) REFERENCES `drugs` (`drug_id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+#EndIf
+
+#IfNotRow background_services name 'AestheticInventoryAlerts'
+INSERT INTO `background_services` (`name`, `title`, `active`, `running`, `next_run`, `execute_interval`, `function`, `require_once`, `sort_order`)
+VALUES ('AestheticInventoryAlerts', 'Aesthetic Inventory Alerts', 1, 0, NOW(), 1440, 'run_aesthetic_inventory_alerts', '/library/aesthetic_inventory_alerts.php', 110);
+#EndIf
