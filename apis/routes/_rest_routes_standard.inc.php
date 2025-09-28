@@ -24,6 +24,8 @@ use OpenEMR\RestControllers\AllergyIntoleranceRestController;
 use OpenEMR\RestControllers\AppointmentRestController;
 use OpenEMR\RestControllers\ConditionRestController;
 use OpenEMR\RestControllers\DocumentRestController;
+use OpenEMR\RestControllers\CrmCampaignRestController;
+use OpenEMR\RestControllers\CrmLeadRestController;
 use OpenEMR\RestControllers\DrugRestController;
 use OpenEMR\RestControllers\EmployerRestController;
 use OpenEMR\RestControllers\EncounterRestController;
@@ -7285,5 +7287,237 @@ return array(
         $return = (new PrescriptionRestController())->getOne($uuid);
 
         return $return;
+    },
+
+    /**
+     *  @OA\Get(
+     *      path="/api/crm/leads",
+     *      description="Lista todos os leads do CRM",
+     *      tags={"crm"},
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "GET /api/crm/leads" => function (HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        return (new CrmLeadRestController())->getAll($request);
+    },
+
+    /**
+     *  @OA\Get(
+     *      path="/api/crm/leads/{uuid}",
+     *      description="Recupera um lead específico",
+     *      tags={"crm"},
+     *      @OA\Parameter(
+     *          name="uuid",
+     *          in="path",
+     *          required=true,
+     *          @OA\Schema(type="string")
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "GET /api/crm/leads/:uuid" => function ($uuid, HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        return (new CrmLeadRestController())->getOne($uuid, $request);
+    },
+
+    /**
+     *  @OA\Post(
+     *      path="/api/crm/leads",
+     *      description="Cria um lead no CRM",
+     *      tags={"crm"},
+     *      @OA\Response(
+     *          response="201",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="400",
+     *          ref="#/components/responses/badrequest"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "POST /api/crm/leads" => function (HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        $data = $request->getRequestBodyJSON() ?? [];
+        return (new CrmLeadRestController())->post($request, (array) $data);
+    },
+
+    /**
+     *  @OA\Put(
+     *      path="/api/crm/leads/{uuid}",
+     *      description="Atualiza um lead",
+     *      tags={"crm"},
+     *      @OA\Parameter(
+     *          name="uuid",
+     *          in="path",
+     *          required=true,
+     *          @OA\Schema(type="string")
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "PUT /api/crm/leads/:uuid" => function ($uuid, HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        $data = $request->getRequestBodyJSON() ?? [];
+        return (new CrmLeadRestController())->put($uuid, $request, (array) $data);
+    },
+
+    /**
+     *  @OA\Post(
+     *      path="/api/crm/leads/{uuid}/rewards",
+     *      description="Credita pontos de fidelidade para um lead",
+     *      tags={"crm"},
+     *      @OA\Parameter(
+     *          name="uuid",
+     *          in="path",
+     *          required=true,
+     *          @OA\Schema(type="string")
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "POST /api/crm/leads/:uuid/rewards" => function ($uuid, HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        $data = $request->getRequestBodyJSON() ?? [];
+        return (new CrmLeadRestController())->postReward($uuid, $request, (array) $data);
+    },
+
+    /**
+     *  @OA\Get(
+     *      path="/api/crm/campaigns",
+     *      description="Lista campanhas do CRM",
+     *      tags={"crm"},
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "GET /api/crm/campaigns" => function (HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        return (new CrmCampaignRestController())->getAll($request);
+    },
+
+    /**
+     *  @OA\Get(
+     *      path="/api/crm/campaigns/{uuid}",
+     *      description="Recupera uma campanha",
+     *      tags={"crm"},
+     *      @OA\Parameter(
+     *          name="uuid",
+     *          in="path",
+     *          required=true,
+     *          @OA\Schema(type="string")
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "GET /api/crm/campaigns/:uuid" => function ($uuid, HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        return (new CrmCampaignRestController())->getOne($uuid);
+    },
+
+    /**
+     *  @OA\Post(
+     *      path="/api/crm/campaigns",
+     *      description="Cria uma campanha",
+     *      tags={"crm"},
+     *      @OA\Response(
+     *          response="201",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="400",
+     *          ref="#/components/responses/badrequest"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "POST /api/crm/campaigns" => function (HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        $data = $request->getRequestBodyJSON() ?? [];
+        return (new CrmCampaignRestController())->post($request, (array) $data);
+    },
+
+    /**
+     *  @OA\Put(
+     *      path="/api/crm/campaigns/{uuid}",
+     *      description="Atualiza uma campanha",
+     *      tags={"crm"},
+     *      @OA\Parameter(
+     *          name="uuid",
+     *          in="path",
+     *          required=true,
+     *          @OA\Schema(type="string")
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "PUT /api/crm/campaigns/:uuid" => function ($uuid, HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        $data = $request->getRequestBodyJSON() ?? [];
+        return (new CrmCampaignRestController())->put($uuid, $request, (array) $data);
     }
 );

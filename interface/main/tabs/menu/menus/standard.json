@@ -899,6 +899,43 @@
         ]
       },
       {
+        "label": "CRM",
+        "icon": "fa-caret-right",
+        "children": [
+          {
+            "label": "Painel CRM",
+            "menu_id": "adm0",
+            "target": "adm",
+            "url": "/modules/saude_estetica_crm/index.php",
+            "children": [],
+            "requirement": 0,
+            "acl_req": [
+              "admin",
+              "super"
+            ]
+          },
+          {
+            "label": "Relatórios CRM",
+            "menu_id": "adm0",
+            "target": "adm",
+            "url": "/modules/saude_estetica_crm/reports.php",
+            "children": [],
+            "requirement": 0,
+            "acl_req": [
+              "admin",
+              "super"
+            ]
+          }
+        ],
+        "requirement": 0,
+        "acl_req": [
+          [
+            "admin",
+            "super"
+          ]
+        ]
+      },
+      {
         "label": "Coding",
         "icon": "fa-caret-right",
         "children": [

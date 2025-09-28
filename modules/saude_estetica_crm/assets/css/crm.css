@@ -1,0 +1,46 @@
+.crm-container {
+    padding-top: 1rem;
+}
+
+.crm-title {
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+}
+
+.crm-metric {
+    font-size: 2.5rem;
+    font-weight: 700;
+    display: block;
+    text-align: center;
+}
+
+.crm-container .card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.crm-container .card-header {
+    font-weight: 600;
+    background-color: #f7f9fc;
+}
+
+.loyalty-list {
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.campaign-table {
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.crm-container .form-inline .form-control {
+    min-width: 150px;
+}
+
+.crm-container .form-inline .btn {
+    margin-top: 1.5rem;
+}
+
+.crm-container textarea {
+    resize: vertical;
+}
