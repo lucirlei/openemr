@@ -47,3 +47,26 @@
 
 --  #EndIf
 --    all blocks are terminated with and #EndIf statement.
+
+--
+--  Default groups ensuring idempotent inserts
+--
+#IfNotRow groups name 'Recepcionista'
+INSERT INTO `groups` (`name`, `user`) VALUES ('Recepcionista', NULL);
+#EndIf
+
+#IfNotRow groups name 'SDR'
+INSERT INTO `groups` (`name`, `user`) VALUES ('SDR', NULL);
+#EndIf
+
+#IfNotRow groups name 'Consultor de Vendas'
+INSERT INTO `groups` (`name`, `user`) VALUES ('Consultor de Vendas', NULL);
+#EndIf
+
+#IfNotRow groups name 'Profissional de Atendimento'
+INSERT INTO `groups` (`name`, `user`) VALUES ('Profissional de Atendimento', NULL);
+#EndIf
+
+#IfNotRow groups name 'Gerente'
+INSERT INTO `groups` (`name`, `user`) VALUES ('Gerente', NULL);
+#EndIf
