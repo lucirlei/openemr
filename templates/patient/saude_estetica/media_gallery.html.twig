@@ -1,0 +1,353 @@
+<div class="container-fluid media-gallery" data-media-gallery
+     data-csrf="{{ csrfToken|attr }}"
+     data-album-endpoint="{{ albumEndpoint|attr }}"
+     data-asset-endpoint="{{ assetEndpointTemplate|attr }}"
+     data-timeline-endpoint="{{ timelineEndpoint|attr }}">
+    <div class="row mb-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    {{ 'Create Album'|xlt }}
+                </div>
+                <div class="card-body">
+                    <form id="create-album-form" novalidate>
+                        <div class="mb-3">
+                            <label class="form-label">{{ 'Title'|xlt }}</label>
+                            <input type="text" class="form-control" name="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">{{ 'Description'|xlt }}</label>
+                            <textarea class="form-control" name="description" rows="2"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">{{ 'Create'|xlt }}</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <span>{{ 'Upload Media'|xlt }}</span>
+                    <small>{{ 'Multiple files supported'|xlt }}</small>
+                </div>
+                <div class="card-body">
+                    <form id="upload-media-form" enctype="multipart/form-data" novalidate>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">{{ 'Album'|xlt }}</label>
+                                <select class="form-select" name="album_id" required>
+                                    <option value="">{{ 'Select an album'|xlt }}</option>
+                                    {% for album in albums %}
+                                        <option value="{{ album.id }}">{{ album.title|text }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">{{ 'Consent status'|xlt }}</label>
+                                <select class="form-select" name="consent_status">
+                                    <option value="pending">{{ 'Pending'|xlt }}</option>
+                                    <option value="approved">{{ 'Approved'|xlt }}</option>
+                                    <option value="revoked">{{ 'Revoked'|xlt }}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">{{ 'Captured at'|xlt }}</label>
+                                <input type="datetime-local" class="form-control" name="captured_at">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">{{ 'Watermark text'|xlt }}</label>
+                                <input type="text" class="form-control" name="watermark" placeholder="{{ 'Optional'|xlt }}">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">{{ 'Notes'|xlt }}</label>
+                                <textarea class="form-control" name="notes" rows="2"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">{{ 'Select files'|xlt }}</label>
+                                <input type="file" class="form-control" name="media[]" multiple required accept="image/*">
+                            </div>
+                        </div>
+                        <button class="btn btn-success mt-3" type="submit">{{ 'Upload'|xlt }}</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <span>{{ 'Side-by-side comparison'|xlt }}</span>
+                    <button class="btn btn-outline-light btn-sm" id="export-timeline">{{ 'Export timeline (JSON)'|xlt }}</button>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 align-items-stretch">
+                        <div class="col-md-3">
+                            <label class="form-label">{{ 'First capture'|xlt }}</label>
+                            <select class="form-select" id="comparison-left"></select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">{{ 'Second capture'|xlt }}</label>
+                            <select class="form-select" id="comparison-right"></select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-center">
+                            <div>
+                                <h6>{{ 'Timeline items'|xlt }}</h6>
+                                <p class="text-muted mb-0">{{ 'Select two captures to compare progression.'|xlt }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3 g-3">
+                        <div class="col-md-6 text-center">
+                            <img id="comparison-left-preview" class="img-fluid rounded shadow-sm" alt="{{ 'First capture preview'|xlt }}">
+                        </div>
+                        <div class="col-md-6 text-center">
+                            <img id="comparison-right-preview" class="img-fluid rounded shadow-sm" alt="{{ 'Second capture preview'|xlt }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    {{ 'Visual timeline'|xlt }}
+                </div>
+                <div class="card-body">
+                    <div id="timeline-container" class="row g-3">
+                        {% for event in timeline %}
+                            <div class="col-md-4">
+                                <div class="card h-100">
+                                    {% if event.download_url is defined %}
+                                        <img class="card-img-top" src="{{ event.download_url|attr }}" alt="{{ 'Timeline image'|xlt }}">
+                                    {% endif %}
+                                    <div class="card-body">
+                                        <h6 class="card-title">{{ event.event_type|default('capture')|xlt }}</h6>
+                                        <p class="card-text text-muted mb-1">
+                                            {{ 'Captured'|xlt }}: {{ event.captured_at ?? event.event_date }}
+                                        </p>
+                                        {% if event.notes %}
+                                            <p class="card-text">{{ event.notes|text }}</p>
+                                        {% endif %}
+                                    </div>
+                                    <div class="card-footer d-flex justify-content-between">
+                                        {% if event.download_url is defined %}
+                                            <a class="btn btn-outline-primary btn-sm" href="{{ event.download_url|attr }}" target="_blank">
+                                                {{ 'Download'|xlt }}
+                                            </a>
+                                        {% endif %}
+                                        <span class="badge bg-light text-dark">#{{ event.asset_id }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="col-12">
+                                <div class="alert alert-info mb-0">{{ 'No media has been uploaded yet.'|xlt }}</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const root = document.querySelector('[data-media-gallery]');
+    if (!root) {
+        return;
+    }
+    const csrf = root.dataset.csrf;
+    const albumEndpoint = root.dataset.albumEndpoint;
+    const assetEndpointTemplate = root.dataset.assetEndpoint;
+    const timelineEndpoint = root.dataset.timelineEndpoint;
+    const timelineState = {{ timeline|json_encode|raw }};
+    const albumsState = {{ albums|json_encode|raw }};
+
+    const albumSelect = root.querySelector('select[name="album_id"]');
+    const createAlbumForm = document.getElementById('create-album-form');
+    const uploadForm = document.getElementById('upload-media-form');
+    const timelineContainer = document.getElementById('timeline-container');
+    const comparisonLeft = document.getElementById('comparison-left');
+    const comparisonRight = document.getElementById('comparison-right');
+    const leftPreview = document.getElementById('comparison-left-preview');
+    const rightPreview = document.getElementById('comparison-right-preview');
+    const exportButton = document.getElementById('export-timeline');
+
+    function populateComparisonOptions() {
+        const optionsHtml = timelineState.map((item) => `<option value="${item.asset_id}" data-url="${item.download_url ?? ''}">#${item.asset_id} - ${(item.event_date ?? '').substring(0, 16)}</option>`).join('');
+        comparisonLeft.innerHTML = `<option value="">{{ 'Select'|xlt }}</option>` + optionsHtml;
+        comparisonRight.innerHTML = `<option value="">{{ 'Select'|xlt }}</option>` + optionsHtml;
+    }
+
+    function updatePreview(selectEl, previewEl) {
+        const selectedOption = selectEl.selectedOptions[0];
+        if (selectedOption && selectedOption.dataset.url) {
+            previewEl.src = selectedOption.dataset.url;
+            previewEl.classList.remove('d-none');
+        } else {
+            previewEl.removeAttribute('src');
+            previewEl.classList.add('d-none');
+        }
+    }
+
+    async function refreshTimeline() {
+        try {
+            const response = await fetch(timelineEndpoint, {
+                headers: { 'X-CSRF-TOKEN': csrf }
+            });
+            if (!response.ok) {
+                throw new Error('Timeline refresh failed');
+            }
+            const payload = await response.json();
+            const newTimeline = payload.timeline ?? [];
+            timelineState.splice(0, timelineState.length, ...newTimeline);
+            renderTimeline();
+            populateComparisonOptions();
+        } catch (error) {
+            console.error(error);
+            alert('{{ 'Unable to refresh the timeline at this time.'|xlt }}');
+        }
+    }
+
+    function renderTimeline() {
+        if (!timelineState.length) {
+            timelineContainer.innerHTML = `<div class="col-12"><div class="alert alert-info mb-0">{{ 'No media has been uploaded yet.'|xlt }}</div></div>`;
+            return;
+        }
+        timelineContainer.innerHTML = timelineState.map((event) => {
+            const url = event.download_url ? `href="${event.download_url}" target="_blank"` : '';
+            const image = event.download_url ? `<img class="card-img-top" src="${event.download_url}" alt="image">` : '';
+            const notes = event.notes ? `<p class="card-text">${event.notes}</p>` : '';
+            return `
+            <div class="col-md-4">
+                <div class="card h-100">
+                    ${image}
+                    <div class="card-body">
+                        <h6 class="card-title">${event.event_type ?? 'capture'}</h6>
+                        <p class="card-text text-muted mb-1">{{ 'Captured'|xlt }}: ${(event.captured_at ?? event.event_date ?? '').substring(0, 16)}</p>
+                        ${notes}
+                    </div>
+                    <div class="card-footer d-flex justify-content-between">
+                        ${event.download_url ? `<a class="btn btn-outline-primary btn-sm" ${url}>{{ 'Download'|xlt }}</a>` : ''}
+                        <span class="badge bg-light text-dark">#${event.asset_id}</span>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function appendAlbumToSelect(album) {
+        const option = document.createElement('option');
+        option.value = album.id;
+        option.textContent = album.title;
+        albumSelect.appendChild(option);
+    }
+
+    createAlbumForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const formData = new FormData(createAlbumForm);
+        const payload = Object.fromEntries(formData.entries());
+        if (!payload.title) {
+            alert('{{ 'Please enter a title for the album.'|xlt }}');
+            return;
+        }
+        try {
+            const response = await fetch(albumEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrf
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                throw new Error('album');
+            }
+            const albumResponse = await response.json();
+            const newAlbum = albumResponse?.data ?? albumResponse;
+            if (newAlbum && newAlbum.id) {
+                albumsState.push(newAlbum);
+                appendAlbumToSelect(newAlbum);
+                createAlbumForm.reset();
+            }
+        } catch (error) {
+            console.error(error);
+            alert('{{ 'Unable to create album.'|xlt }}');
+        }
+    });
+
+    uploadForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const selectedAlbum = albumSelect.value;
+        if (!selectedAlbum) {
+            alert('{{ 'Select an album before uploading.'|xlt }}');
+            return;
+        }
+        const filesInput = uploadForm.querySelector('input[name="media[]"]');
+        if (!filesInput.files.length) {
+            alert('{{ 'Select at least one file.'|xlt }}');
+            return;
+        }
+        const endpoint = assetEndpointTemplate.replace('%s', selectedAlbum);
+        const formData = new FormData();
+        for (const file of filesInput.files) {
+            formData.append('media[]', file, file.name);
+        }
+        const notes = uploadForm.querySelector('textarea[name="notes"]').value;
+        const capturedAt = uploadForm.querySelector('input[name="captured_at"]').value;
+        const consentStatus = uploadForm.querySelector('select[name="consent_status"]').value;
+        const watermark = uploadForm.querySelector('input[name="watermark"]').value;
+        const metadata = Array.from(filesInput.files, () => ({ notes, captured_at: capturedAt }));
+        formData.append('metadata', JSON.stringify(metadata));
+        if (consentStatus) {
+            formData.append('consent_status', consentStatus);
+        }
+        if (watermark) {
+            formData.append('watermark', watermark);
+        }
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrf },
+                body: formData
+            });
+            if (!response.ok) {
+                throw new Error('upload');
+            }
+            await response.json();
+            uploadForm.reset();
+            filesInput.value = '';
+            await refreshTimeline();
+        } catch (error) {
+            console.error(error);
+            alert('{{ 'Unable to upload media. Please try again.'|xlt }}');
+        }
+    });
+
+    comparisonLeft.addEventListener('change', () => updatePreview(comparisonLeft, leftPreview));
+    comparisonRight.addEventListener('change', () => updatePreview(comparisonRight, rightPreview));
+
+    exportButton.addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(timelineState, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'patient-media-timeline.json';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    });
+
+    renderTimeline();
+    populateComparisonOptions();
+    updatePreview(comparisonLeft, leftPreview);
+    updatePreview(comparisonRight, rightPreview);
+})();
+</script>

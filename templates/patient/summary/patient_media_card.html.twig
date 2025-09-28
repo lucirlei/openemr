@@ -1,0 +1,28 @@
+<div class="card-body">
+    {% if prependedInjection is defined %}{{ prependedInjection|raw }}{% endif %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">{{ 'Latest captures'|xlt }}</h6>
+        <a class="btn btn-outline-primary btn-sm" href="{{ galleryUrl|attr }}">{{ 'Open gallery'|xlt }}</a>
+    </div>
+    {% if timeline|length > 0 %}
+        <div class="row g-2">
+            {% for item in timeline %}
+                <div class="col-4">
+                    <div class="ratio ratio-1x1 rounded overflow-hidden bg-light">
+                        {% if item.preview_url is defined %}
+                            <img src="{{ item.preview_url|attr }}" alt="{{ 'Preview'|xlt }}" class="w-100 h-100" style="object-fit: cover;">
+                        {% else %}
+                            <div class="d-flex align-items-center justify-content-center h-100 text-muted small">
+                                {{ 'No preview'|xlt }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <small class="text-muted d-block mt-1">{{ item.event_date ?? item.captured_at }}</small>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted mb-0">{{ 'Upload media to populate the timeline.'|xlt }}</p>
+    {% endif %}
+    {% if appendedInjection is defined %}{{ appendedInjection|raw }}{% endif %}
+</div>

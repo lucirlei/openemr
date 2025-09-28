@@ -34,6 +34,7 @@ use OpenEMR\RestControllers\InsuranceRestController;
 use OpenEMR\RestControllers\ListRestController;
 use OpenEMR\RestControllers\MessageRestController;
 use OpenEMR\RestControllers\PatientRestController;
+use OpenEMR\RestControllers\PatientMediaRestController;
 use OpenEMR\RestControllers\PractitionerRestController;
 use OpenEMR\RestControllers\PrescriptionRestController;
 use OpenEMR\RestControllers\ProcedureRestController;
@@ -5898,6 +5899,102 @@ return array(
         $return = (new DocumentRestController())->downloadFile($pid, $did);
 
         return $return;
+    },
+
+    /**
+     *  @OA\Get(
+     *      path="/api/patient/{pid}/media/albums",
+     *      description="Lists aesthetic media albums for a patient",
+     *      tags={"standard"},
+     *      @OA\Parameter(
+     *          name="pid",
+     *          in="path",
+     *          description="The patient identifier",
+     *          required=true,
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\Response(response="200", ref="#/components/responses/standard"),
+     *      @OA\Response(response="401", ref="#/components/responses/unauthorized"),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "GET /api/patient/:pid/media/albums" => function ($pid, HttpRestRequest $request) {
+        return (new PatientMediaRestController())->listAlbums((int)$pid);
+    },
+
+    /**
+     *  @OA\Post(
+     *      path="/api/patient/{pid}/media/albums",
+     *      description="Creates a new aesthetic media album",
+     *      tags={"standard"},
+     *      @OA\Parameter(
+     *          name="pid",
+     *          in="path",
+     *          required=true,
+     *          @OA\Schema(type="integer")
+     *      ),
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\MediaType(
+     *              mediaType="application/json",
+     *              @OA\Schema(
+     *                  @OA\Property(property="title", type="string"),
+     *                  @OA\Property(property="description", type="string")
+     *              )
+     *          )
+     *      ),
+     *      @OA\Response(response="200", ref="#/components/responses/standard"),
+     *      @OA\Response(response="400", ref="#/components/responses/badrequest"),
+     *      @OA\Response(response="401", ref="#/components/responses/unauthorized"),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "POST /api/patient/:pid/media/albums" => function ($pid, HttpRestRequest $request) {
+        return (new PatientMediaRestController())->createAlbum((int)$pid, $request);
+    },
+
+    /**
+     *  @OA\Post(
+     *      path="/api/patient/{pid}/media/albums/{albumId}/assets",
+     *      description="Uploads media assets to an existing album",
+     *      tags={"standard"},
+     *      @OA\Parameter(name="pid", in="path", required=true, @OA\Schema(type="integer")),
+     *      @OA\Parameter(name="albumId", in="path", required=true, @OA\Schema(type="integer")),
+     *      @OA\RequestBody(
+     *          required=true,
+     *          @OA\MediaType(
+     *              mediaType="multipart/form-data",
+     *              @OA\Schema(
+     *                  @OA\Property(property="media", type="string", format="binary"),
+     *                  @OA\Property(property="metadata", type="string", description="JSON metadata per file"),
+     *                  @OA\Property(property="watermark", type="string", description="Watermark configuration"),
+     *                  @OA\Property(property="consent_status", type="string")
+     *              )
+     *          )
+     *      ),
+     *      @OA\Response(response="200", ref="#/components/responses/standard"),
+     *      @OA\Response(response="400", ref="#/components/responses/badrequest"),
+     *      @OA\Response(response="401", ref="#/components/responses/unauthorized"),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "POST /api/patient/:pid/media/albums/:albumId/assets" => function ($pid, $albumId, HttpRestRequest $request) {
+        return (new PatientMediaRestController())->uploadAssets((int)$pid, (int)$albumId, $request);
+    },
+
+    /**
+     *  @OA\Get(
+     *      path="/api/patient/{pid}/media/timeline",
+     *      description="Returns the visual timeline of media assets",
+     *      tags={"standard"},
+     *      @OA\Parameter(name="pid", in="path", required=true, @OA\Schema(type="integer")),
+     *      @OA\Response(response="200", ref="#/components/responses/standard"),
+     *      @OA\Response(response="401", ref="#/components/responses/unauthorized"),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "GET /api/patient/:pid/media/timeline" => function ($pid, HttpRestRequest $request) {
+        return (new PatientMediaRestController())->getTimeline((int)$pid);
     },
 
     /**
