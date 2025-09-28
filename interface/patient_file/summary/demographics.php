@@ -55,6 +55,7 @@ use OpenEMR\Patient\Cards\CareTeamViewCard;
 use OpenEMR\Patient\Cards\DemographicsViewCard;
 use OpenEMR\Patient\Cards\InsuranceViewCard;
 use OpenEMR\Patient\Cards\PortalCard;
+use OpenEMR\Patient\Cards\PatientMediaTimelineCard;
 use OpenEMR\Reminder\BirthdayReminder;
 use OpenEMR\Services\AllergyIntoleranceService;
 use OpenEMR\Services\ConditionService;
@@ -1512,6 +1513,8 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                             break;
                         }
                     }
+
+                    $patientMediaCard = new PatientMediaTimelineCard((int)$pid);
 
                     $sectionRenderEvents = $ed->dispatch(new SectionEvent('secondary'), SectionEvent::EVENT_HANDLE);
                     $sectionCards = $sectionRenderEvents->getCards();
