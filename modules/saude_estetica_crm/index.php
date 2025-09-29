@@ -23,6 +23,20 @@ $campaignService = new CrmCampaignService();
 $alerts = [];
 $errors = [];
 
+$pipelineStages = [
+    'captured' => xlt('Captado'),
+    'qualified' => xlt('Qualificado'),
+    'consultation' => xlt('Consulta'),
+    'proposal' => xlt('Proposta'),
+    'won' => xlt('Ganho'),
+    'lost' => xlt('Perdido'),
+];
+
+$csrfToken = CsrfUtils::collectCsrfToken();
+$isAjaxRequest = (isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+        && strtolower((string) $_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+    || (isset($_POST['ajax']) && (string) $_POST['ajax'] === '1');
+
 function crm_format_messages(ProcessingResult $result): array
 {
     $messages = [];
@@ -76,15 +90,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             break;
         case 'update_pipeline':
-            $uuid = $_POST['lead_uuid'] ?? '';
-            $stage = $_POST['new_stage'] ?? '';
-            if ($uuid && $stage) {
-                $result = $leadService->updateLead($uuid, ['pipeline_stage' => $stage]);
-                if ($result->hasErrors()) {
-                    $errors = array_merge($errors, crm_format_messages($result));
-                } else {
-                    $alerts[] = xlt('Pipeline atualizado.');
+            $uuid = trim((string) ($_POST['lead_uuid'] ?? ''));
+            $stage = trim((string) ($_POST['new_stage'] ?? ''));
+            if ($uuid === '' || $stage === '') {
+                if ($isAjaxRequest) {
+                    header('Content-Type: application/json');
+                    echo json_encode([
+                        'success' => false,
+                        'message' => xlt('Dados incompletos para atualizar o pipeline.'),
+                    ]);
+                    exit;
                 }
+                if ($uuid === '') {
+                    $errors[] = xlt('Selecione um lead para atualizar.');
+                }
+                if ($stage === '') {
+                    $errors[] = xlt('Selecione a etapa do pipeline.');
+                }
+                break;
+            }
+
+            $result = $leadService->updateLead($uuid, ['pipeline_stage' => $stage]);
+            if ($result->hasErrors()) {
+                $messages = crm_format_messages($result);
+                if ($isAjaxRequest) {
+                    header('Content-Type: application/json');
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $messages[0] ?? xlt('Não foi possível atualizar o pipeline.'),
+                    ]);
+                    exit;
+                }
+                $errors = array_merge($errors, $messages);
+            } else {
+                if ($isAjaxRequest) {
+                    header('Content-Type: application/json');
+                    echo json_encode([
+                        'success' => true,
+                        'message' => xlt('Pipeline atualizado.'),
+                        'data' => [
+                            'lead_uuid' => $uuid,
+                            'pipeline_stage' => $stage,
+                        ],
+                    ]);
+                    exit;
+                }
+                $alerts[] = xlt('Pipeline atualizado.');
             }
             break;
         case 'create_campaign':
@@ -135,28 +186,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $metrics = $leadService->getDashboardMetrics();
-$pipelineSummary = $leadService->getPipelineSummary();
 $leaderboard = $leadService->getLoyaltyLeaderboard();
 $campaignOptions = $campaignService->getActiveCampaignOptions();
-$recentLeadsResult = $leadService->listLeads(['limit' => 15]);
-if ($recentLeadsResult->hasErrors()) {
-    $errors = array_merge($errors, crm_format_messages($recentLeadsResult));
+
+$kanbanLeads = [];
+$recentLeads = [];
+$kanbanColumns = [];
+$kanbanLeadsResult = $leadService->listLeads(['limit' => 250]);
+if ($kanbanLeadsResult->hasErrors()) {
+    $errors = array_merge($errors, crm_format_messages($kanbanLeadsResult));
+} else {
+    $kanbanLeads = $kanbanLeadsResult->getData();
+    $recentLeads = array_slice($kanbanLeads, 0, 15);
 }
-$recentLeads = $recentLeadsResult->getData();
+
+foreach ($pipelineStages as $stageKey => $stageLabel) {
+    $kanbanColumns[$stageKey] = [
+        'key' => $stageKey,
+        'label' => $stageLabel,
+        'leads' => [],
+    ];
+}
+
+$extraColumns = [];
+foreach ($kanbanLeads as $lead) {
+    $stageKey = $lead['pipeline_stage'] ?? 'captured';
+    if ($stageKey === '') {
+        $stageKey = 'captured';
+    }
+
+    if (!isset($kanbanColumns[$stageKey])) {
+        if (!isset($extraColumns[$stageKey])) {
+            $prettyLabel = ucwords(str_replace(['_', '-'], ' ', (string) $stageKey));
+            $extraColumns[$stageKey] = [
+                'key' => $stageKey,
+                'label' => $prettyLabel,
+                'leads' => [],
+            ];
+        }
+        $extraColumns[$stageKey]['leads'][] = $lead;
+        continue;
+    }
+
+    $kanbanColumns[$stageKey]['leads'][] = $lead;
+}
+
+foreach ($extraColumns as $extraKey => $extraColumn) {
+    $kanbanColumns[$extraKey] = $extraColumn;
+}
+
 $campaignListResult = $campaignService->listCampaigns();
 if ($campaignListResult->hasErrors()) {
     $errors = array_merge($errors, crm_format_messages($campaignListResult));
 }
 $campaignList = $campaignListResult->getData();
-
-$pipelineStages = [
-    'captured' => xlt('Captado'),
-    'qualified' => xlt('Qualificado'),
-    'consultation' => xlt('Consulta'),
-    'proposal' => xlt('Proposta'),
-    'won' => xlt('Ganho'),
-    'lost' => xlt('Perdido'),
-];
 
 Header::setupHeader(['jquery-ui', 'datatables', 'moment']);
 ?>
@@ -206,13 +289,92 @@ Header::setupHeader(['jquery-ui', 'datatables', 'moment']);
             </div>
         </div>
 
+        <div class="card mb-4 crm-kanban-panel">
+            <div class="card-header"><?php echo xlt('Pipeline Kanban'); ?></div>
+            <div class="card-body">
+                <div class="crm-kanban-feedback alert d-none" role="alert"></div>
+                <div class="crm-kanban-board"
+                    data-csrf="<?php echo attr($csrfToken); ?>"
+                    data-update-url="<?php echo attr($GLOBALS['webroot'] . '/modules/saude_estetica_crm/index.php'); ?>"
+                    data-success-message="<?php echo attr(xlt('Pipeline atualizado.')); ?>"
+                    data-error-message="<?php echo attr(xlt('Não foi possível atualizar o pipeline.')); ?>">
+                    <?php foreach ($kanbanColumns as $stageKey => $column) : ?>
+                        <div class="crm-kanban-column" data-stage="<?php echo attr($stageKey); ?>">
+                            <div class="crm-kanban-column-header">
+                                <span class="crm-kanban-column-title"><?php echo text($column['label']); ?></span>
+                                <span class="crm-kanban-column-count badge badge-light" data-stage-count><?php echo text((string) count($column['leads'])); ?></span>
+                            </div>
+                            <div class="crm-kanban-column-body">
+                                <div class="crm-kanban-empty<?php echo empty($column['leads']) ? '' : ' d-none'; ?>"><?php echo xlt('Nenhum lead nesta etapa.'); ?></div>
+                                <?php foreach ($column['leads'] as $lead) : ?>
+                                    <?php
+                                        $cardStage = $lead['pipeline_stage'] ?? 'captured';
+                                        if ($cardStage === '') {
+                                            $cardStage = 'captured';
+                                        }
+                                        $loyaltyPoints = (int) ($lead['loyalty_points'] ?? 0);
+                                    ?>
+                                    <div class="crm-kanban-card" data-lead="<?php echo attr($lead['uuid']); ?>" data-stage="<?php echo attr($cardStage); ?>">
+                                        <div class="crm-kanban-card-surface">
+                                            <div class="crm-kanban-card-header">
+                                                <span class="crm-kanban-card-title"><?php echo text($lead['full_name']); ?></span>
+                                                <?php if (!empty($lead['status'])) : ?>
+                                                    <span class="crm-kanban-card-status badge badge-light"><?php echo text($lead['status']); ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="crm-kanban-card-body">
+                                                <?php if (!empty($lead['phone'])) : ?>
+                                                    <div class="crm-kanban-card-line">
+                                                        <span class="crm-kanban-card-label"><?php echo xlt('Telefone'); ?></span>
+                                                        <span class="crm-kanban-card-value"><?php echo text($lead['phone']); ?></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if (!empty($lead['email'])) : ?>
+                                                    <div class="crm-kanban-card-line">
+                                                        <span class="crm-kanban-card-label"><?php echo xlt('E-mail'); ?></span>
+                                                        <span class="crm-kanban-card-value"><?php echo text($lead['email']); ?></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if (!empty($lead['campaign_name']) || !empty($lead['source'])) : ?>
+                                                    <div class="crm-kanban-card-tags">
+                                                        <?php if (!empty($lead['campaign_name'])) : ?>
+                                                            <span class="crm-kanban-card-chip"><?php echo text($lead['campaign_name']); ?></span>
+                                                        <?php endif; ?>
+                                                        <?php if (!empty($lead['source'])) : ?>
+                                                            <span class="crm-kanban-card-chip crm-kanban-card-chip-source"><?php echo text($lead['source']); ?></span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if ($loyaltyPoints > 0) : ?>
+                                                    <div class="crm-kanban-card-line crm-kanban-card-line--points">
+                                                        <span class="crm-kanban-card-label"><?php echo xlt('Pontos'); ?></span>
+                                                        <span class="crm-kanban-card-value"><?php echo text((string) $loyaltyPoints); ?></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if (!empty($lead['notes'])) : ?>
+                                                    <div class="crm-kanban-card-notes"><?php echo text($lead['notes']); ?></div>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="crm-kanban-card-footer">
+                                                <small class="text-muted"><?php echo xlt('Atualizado em:'); ?> <?php echo text($lead['updated_at']); ?></small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+
         <div class="row">
             <div class="col-lg-6">
                 <div class="card mb-4">
                     <div class="card-header"><?php echo xlt('Captura de Leads'); ?></div>
                     <div class="card-body">
                         <form method="post" class="form-horizontal">
-                            <input type="hidden" name="crm_csrf" value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>" />
+                            <input type="hidden" name="crm_csrf" value="<?php echo attr($csrfToken); ?>" />
                             <input type="hidden" name="action" value="create_lead" />
                             <div class="form-group">
                                 <label class="form-label" for="full_name"><?php echo xlt('Nome completo'); ?></label>
@@ -270,50 +432,6 @@ Header::setupHeader(['jquery-ui', 'datatables', 'moment']);
 
             <div class="col-lg-6">
                 <div class="card mb-4">
-                    <div class="card-header"><?php echo xlt('Pipeline e Fidelidade'); ?></div>
-                    <div class="card-body">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th><?php echo xlt('Etapa'); ?></th>
-                                    <th class="text-right"><?php echo xlt('Quantidade'); ?></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($pipelineSummary as $stageRow) : ?>
-                                    <tr>
-                                        <td><?php echo text($pipelineStages[$stageRow['pipeline_stage']] ?? $stageRow['pipeline_stage']); ?></td>
-                                        <td class="text-right"><?php echo text((string) $stageRow['total']); ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-
-                        <form method="post" class="form-inline mt-3">
-                            <input type="hidden" name="crm_csrf" value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>" />
-                            <input type="hidden" name="action" value="update_pipeline" />
-                            <div class="form-group mr-2">
-                                <label class="mr-2" for="lead_uuid"><?php echo xlt('Lead'); ?></label>
-                                <select name="lead_uuid" id="lead_uuid" class="form-control">
-                                    <?php foreach ($recentLeads as $lead) : ?>
-                                        <option value="<?php echo attr($lead['uuid']); ?>"><?php echo text($lead['full_name']); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group mr-2">
-                                <label class="mr-2" for="new_stage"><?php echo xlt('Nova etapa'); ?></label>
-                                <select class="form-control" name="new_stage" id="new_stage">
-                                    <?php foreach ($pipelineStages as $key => $label) : ?>
-                                        <option value="<?php echo attr($key); ?>"><?php echo text($label); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-secondary"><?php echo xlt('Atualizar'); ?></button>
-                        </form>
-                    </div>
-                </div>
-
-                <div class="card mb-4">
                     <div class="card-header"><?php echo xlt('Pontuação de Fidelidade'); ?></div>
                     <div class="card-body">
                         <ul class="list-group loyalty-list">
@@ -325,7 +443,7 @@ Header::setupHeader(['jquery-ui', 'datatables', 'moment']);
                             <?php endforeach; ?>
                         </ul>
                         <form method="post" class="form-inline mt-3">
-                            <input type="hidden" name="crm_csrf" value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>" />
+                            <input type="hidden" name="crm_csrf" value="<?php echo attr($csrfToken); ?>" />
                             <input type="hidden" name="action" value="award_points" />
                             <div class="form-group mr-2">
                                 <label class="mr-2" for="reward_lead_uuid"><?php echo xlt('Lead'); ?></label>
@@ -357,7 +475,7 @@ Header::setupHeader(['jquery-ui', 'datatables', 'moment']);
                     <div class="card-header"><?php echo xlt('Campanhas'); ?></div>
                     <div class="card-body">
                         <form method="post">
-                            <input type="hidden" name="crm_csrf" value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>" />
+                            <input type="hidden" name="crm_csrf" value="<?php echo attr($csrfToken); ?>" />
                             <input type="hidden" name="action" value="create_campaign" />
                             <div class="form-group">
                                 <label for="campaign_name" class="form-label"><?php echo xlt('Nome da campanha'); ?></label>
