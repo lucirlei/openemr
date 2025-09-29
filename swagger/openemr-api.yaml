@@ -7051,6 +7051,91 @@ paths:
       security:
         -
           openemr_auth: []
+  /api/crm:
+    get:
+      tags:
+        - crm
+      summary: 'Resumo operacional do CRM com integrações agenda/PDV'
+      description: 'Retorna métricas agregadas de leads, campanhas e interações recentes.'
+      parameters:
+        - name: months
+          in: query
+          description: 'Quantidade de meses considerados nas tendências.'
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 24
+        - name: leaderboard_limit
+          in: query
+          description: 'Número de leads retornados no ranking de fidelidade.'
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - name: interactions_limit
+          in: query
+          description: 'Total de interações recentes incluídas no resumo.'
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: 'Resumo consolidado.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/api_crm_summary_response'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+      security:
+        -
+          openemr_auth: []
+  /api/billing/plans:
+    get:
+      tags:
+        - billing
+      summary: 'Lista planos de faturamento e níveis de preço'
+      description: 'Retorna os níveis de preço cadastrados com estatísticas agregadas.'
+      parameters:
+        - name: active
+          in: query
+          description: 'Filtra somente planos ativos (1) ou inativos (0).'
+          required: false
+          schema:
+            type: integer
+            enum:
+              - 0
+              - 1
+        - name: search
+          in: query
+          description: 'Filtro por título ou descrição.'
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: 'Limita o número de registros retornados.'
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: 'Coleção de planos de faturamento.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/api_billing_plan_collection'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+      security:
+        -
+          openemr_auth: []
 components:
   schemas:
     api_patient_request:
@@ -7413,6 +7498,256 @@ components:
           uuid: 90c196f2-51cc-4655-8858-3a80aebff3ef
           date: '2019-09-14 00:00:00'
           reason: 'Pregnancy Test'
+    api_crm_summary_response:
+      description: 'Resumo consolidado do módulo de CRM'
+      type: object
+      properties:
+        totals:
+          type: object
+          properties:
+            leads:
+              type: integer
+            active_campaigns:
+              type: integer
+            reward_points:
+              type: integer
+        pipeline:
+          type: object
+          properties:
+            by_stage:
+              type: array
+              items:
+                $ref: '#/components/schemas/api_crm_pipeline_item'
+            by_status:
+              type: array
+              items:
+                $ref: '#/components/schemas/api_crm_status_item'
+        monthly:
+          type: array
+          items:
+            $ref: '#/components/schemas/api_crm_period_item'
+        leaderboard:
+          type: array
+          items:
+            $ref: '#/components/schemas/api_crm_leaderboard_item'
+        campaigns:
+          type: object
+          properties:
+            active:
+              type: array
+              items:
+                type: object
+                properties:
+                  uuid:
+                    type: string
+                  name:
+                    type: string
+        recent_interactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/api_crm_interaction_item'
+      example:
+        totals:
+          leads: 120
+          active_campaigns: 3
+          reward_points: 5400
+        pipeline:
+          by_stage:
+            - stage: captured
+              total: 45
+          by_status:
+            - status: new
+              total: 12
+        monthly:
+          - period: '2024-01'
+            total: 20
+        leaderboard:
+          - uuid: 4f5a2e90-7d80-4af1-83bd-8f7d4a8858f5
+            full_name: 'Jane Doe'
+            loyalty_points: 125
+            status: active
+        campaigns:
+          active:
+            - uuid: 0a1b2c3d-4455-6677-8899-aabbccddeeff
+              name: 'Campanha Padrão'
+        recent_interactions:
+          - id: 1
+            lead_uuid: 4f5a2e90-7d80-4af1-83bd-8f7d4a8858f5
+            lead_name: 'Jane Doe'
+            interaction_type: webhook
+            channel: agenda
+            subject: 'Lead criado'
+            message: 'Lead capturado via webhook'
+            payload: {}
+            scheduled_at: null
+            completed_at: null
+            user_id: null
+            outcome: queued
+            created_at: '2024-01-10 12:00:00'
+    api_crm_pipeline_item:
+      type: object
+      properties:
+        stage:
+          type: string
+          nullable: true
+        total:
+          type: integer
+      example:
+        stage: captured
+        total: 12
+    api_crm_status_item:
+      type: object
+      properties:
+        status:
+          type: string
+          nullable: true
+        total:
+          type: integer
+      example:
+        status: converted
+        total: 8
+    api_crm_period_item:
+      type: object
+      properties:
+        period:
+          type: string
+        total:
+          type: integer
+      example:
+        period: '2024-01'
+        total: 30
+    api_crm_leaderboard_item:
+      type: object
+      properties:
+        uuid:
+          type: string
+        full_name:
+          type: string
+        loyalty_points:
+          type: integer
+        status:
+          type: string
+          nullable: true
+      example:
+        uuid: 4f5a2e90-7d80-4af1-83bd-8f7d4a8858f5
+        full_name: 'Jane Doe'
+        loyalty_points: 125
+        status: active
+    api_crm_interaction_item:
+      type: object
+      properties:
+        id:
+          type: integer
+        lead_uuid:
+          type: string
+        lead_name:
+          type: string
+        interaction_type:
+          type: string
+        channel:
+          type: string
+          nullable: true
+        subject:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+        payload:
+          type: object
+          nullable: true
+        scheduled_at:
+          type: string
+          nullable: true
+        completed_at:
+          type: string
+          nullable: true
+        user_id:
+          type: integer
+          nullable: true
+        outcome:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      example:
+        id: 1
+        lead_uuid: 4f5a2e90-7d80-4af1-83bd-8f7d4a8858f5
+        lead_name: 'Jane Doe'
+        interaction_type: webhook
+        channel: agenda
+        subject: 'Lead criado'
+        message: 'Lead capturado via webhook'
+        payload: {}
+        scheduled_at: null
+        completed_at: null
+        user_id: null
+        outcome: queued
+        created_at: '2024-01-10 12:00:00'
+    api_billing_plan_collection:
+      description: 'Lista de planos de faturamento'
+      type: object
+      properties:
+        validationErrors:
+          type: array
+          items:
+            type: object
+        internalErrors:
+          type: array
+          items:
+            type: object
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/api_billing_plan_item'
+        links:
+          type: array
+          items:
+            type: object
+      example:
+        validationErrors: []
+        internalErrors: []
+        data:
+          - level: standard
+            title: 'Plano Padrão'
+            description: null
+            is_default: true
+            active: true
+            price_count: 120
+            average_price: 150
+            total_value: 18000
+        links: []
+    api_billing_plan_item:
+      type: object
+      properties:
+        level:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        is_default:
+          type: boolean
+        active:
+          type: boolean
+        price_count:
+          type: integer
+        average_price:
+          type: number
+          format: float
+        total_value:
+          type: number
+          format: float
+      example:
+        level: premium
+        title: 'Plano Premium'
+        description: 'Valores especiais para tratamentos estéticos'
+        is_default: false
+        active: true
+        price_count: 42
+        average_price: 320.5
+        total_value: 13461.0
           facility: 'Owerri General Hospital'
           facility_id: '3'
           pid: '1'

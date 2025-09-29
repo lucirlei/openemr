@@ -23,9 +23,15 @@ use Ramsey\Uuid\Uuid;
 
 class CrmLeadService extends BaseService
 {
-    public function __construct()
+    private CrmIntegrationService $integrationService;
+
+    private CrmMessageBus $messageBus;
+
+    public function __construct(?CrmIntegrationService $integrationService = null, ?CrmMessageBus $messageBus = null)
     {
         parent::__construct('crm_leads');
+        $this->integrationService = $integrationService ?? new CrmIntegrationService($this);
+        $this->messageBus = $messageBus ?? new CrmMessageBus($this->integrationService);
     }
 
     /**
@@ -67,6 +73,7 @@ class CrmLeadService extends BaseService
             $row = $this->getLeadByUuid($uuid);
             if (!empty($row)) {
                 $result->addData($row);
+                $this->dispatchLeadEvent('crm.lead.created', $row, ['source' => $lead['source'] ?? null]);
             }
         } catch (Exception $exception) {
             $result->addInternalError($exception->getMessage());
@@ -109,10 +116,14 @@ class CrmLeadService extends BaseService
         $setParts = [];
         $bind = [];
 
+        $changeSet = [];
         foreach ($allowedFields as $field) {
             if (array_key_exists($field, $changes)) {
                 $setParts[] = "$field = ?";
                 $bind[] = $changes[$field];
+                if (!array_key_exists($field, $existing) || $existing[$field] !== $changes[$field]) {
+                    $changeSet[$field] = $changes[$field];
+                }
             }
         }
 
@@ -126,7 +137,11 @@ class CrmLeadService extends BaseService
 
         try {
             sqlStatement($sql, $bind);
-            $result->addData($this->getLeadByUuid($uuid));
+            $updated = $this->getLeadByUuid($uuid);
+            $result->addData($updated);
+            if (!empty($changeSet) && !empty($updated)) {
+                $this->dispatchLeadEvent('crm.lead.updated', $updated, ['changes' => $changeSet]);
+            }
         } catch (Exception $exception) {
             $result->addInternalError($exception->getMessage());
         }
@@ -234,7 +249,15 @@ class CrmLeadService extends BaseService
         try {
             sqlStatement('UPDATE crm_leads SET loyalty_points = loyalty_points + ?, updated_at = NOW() WHERE uuid = ?', [$points, $leadUuid]);
             $rewardService->recordReward((int) $lead['id'], $rewardType, $points, $reason);
-            $result->addData($this->getLeadByUuid($leadUuid));
+            $updatedLead = $this->getLeadByUuid($leadUuid);
+            $result->addData($updatedLead);
+            if (!empty($updatedLead)) {
+                $this->dispatchLeadEvent('crm.lead.rewarded', $updatedLead, [
+                    'points' => $points,
+                    'reason' => $reason,
+                    'reward_type' => $rewardType,
+                ]);
+            }
         } catch (Exception $exception) {
             $result->addInternalError($exception->getMessage());
         }
@@ -297,6 +320,11 @@ class CrmLeadService extends BaseService
         $row['patient_id'] = $row['patient_id'] !== null ? (int) $row['patient_id'] : null;
         $row['loyalty_points'] = (int) ($row['loyalty_points'] ?? 0);
         return $row;
+    }
+
+    private function dispatchLeadEvent(string $event, array $lead, array $metadata = []): void
+    {
+        $this->messageBus->publishLeadEvent($event, $lead, $metadata);
     }
 }
 

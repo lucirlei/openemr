@@ -12,6 +12,7 @@
 namespace OpenEMR\Services\Crm;
 
 use Exception;
+use OpenEMR\Common\Database\QueryUtils;
 use OpenEMR\Services\BaseService;
 use OpenEMR\Validators\ProcessingResult;
 use Particle\Validator\Validator;
@@ -83,6 +84,43 @@ class CrmInteractionService extends BaseService
         }
 
         return $result;
+    }
+
+    public function listRecentInteractions(int $limit = 10): array
+    {
+        $limit = max(1, $limit);
+        $sql = 'SELECT ci.*, cl.uuid AS lead_uuid, cl.full_name AS lead_name '
+            . 'FROM crm_interactions ci '
+            . 'JOIN crm_leads cl ON cl.id = ci.lead_id '
+            . 'ORDER BY ci.created_at DESC '
+            . 'LIMIT ?';
+
+        $records = QueryUtils::fetchRecords($sql, [$limit]);
+        $normalized = [];
+
+        foreach ($records as $record) {
+            if (!empty($record['payload']) && is_string($record['payload'])) {
+                $record['payload'] = json_decode($record['payload'], true);
+            }
+
+            $normalized[] = [
+                'id' => (int) $record['id'],
+                'lead_uuid' => $record['lead_uuid'],
+                'lead_name' => $record['lead_name'],
+                'interaction_type' => $record['interaction_type'],
+                'channel' => $record['channel'],
+                'subject' => $record['subject'],
+                'message' => $record['message'],
+                'payload' => $record['payload'],
+                'scheduled_at' => $record['scheduled_at'],
+                'completed_at' => $record['completed_at'],
+                'user_id' => $record['user_id'] !== null ? (int) $record['user_id'] : null,
+                'outcome' => $record['outcome'],
+                'created_at' => $record['created_at'],
+            ];
+        }
+
+        return $normalized;
     }
 
     private function buildValidator(): Validator
