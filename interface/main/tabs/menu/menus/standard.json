@@ -936,6 +936,31 @@
         ]
       },
       {
+        "label": "Saúde & Estética",
+        "icon": "fa-caret-right",
+        "children": [
+          {
+            "label": "Pacotes",
+            "menu_id": "adm0",
+            "target": "adm",
+            "url": "/interface/billing/saude_estetica/packages.php",
+            "children": [],
+            "requirement": 0,
+            "acl_req": [
+              "admin",
+              "super"
+            ]
+          }
+        ],
+        "requirement": 0,
+        "acl_req": [
+          [
+            "admin",
+            "super"
+          ]
+        ]
+      },
+      {
         "label": "Coding",
         "icon": "fa-caret-right",
         "children": [
