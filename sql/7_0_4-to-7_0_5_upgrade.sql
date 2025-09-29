@@ -198,6 +198,48 @@ ALTER TABLE `drugs`
     ADD COLUMN `photo_url` varchar(255) NOT NULL DEFAULT '' COMMENT 'public URL or storage reference for product photos';
 #EndIf
 
+#IfNotTable scheduler_resources
+CREATE TABLE `scheduler_resources` (
+    `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+    `uuid` char(36) DEFAULT NULL,
+    `name` varchar(191) NOT NULL,
+    `resource_type` varchar(64) NOT NULL DEFAULT 'generic',
+    `facility_id` int(11) DEFAULT NULL,
+    `color` varchar(7) DEFAULT NULL,
+    `active` tinyint(1) NOT NULL DEFAULT 1,
+    `notes` text,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `idx_scheduler_resources_uuid` (`uuid`),
+    KEY `idx_scheduler_resources_facility` (`facility_id`),
+    CONSTRAINT `scheduler_resources_facility_fk` FOREIGN KEY (`facility_id`) REFERENCES `facility` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB;
+#EndIf
+
+#IfNotTable event_resource_link
+CREATE TABLE `event_resource_link` (
+    `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+    `event_id` int(11) NOT NULL,
+    `resource_id` int(11) unsigned NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_event_resource` (`event_id`,`resource_id`),
+    KEY `idx_event_resource_link_resource` (`resource_id`),
+    CONSTRAINT `event_resource_link_event_fk` FOREIGN KEY (`event_id`) REFERENCES `openemr_postcalendar_events` (`pc_eid`) ON DELETE CASCADE,
+    CONSTRAINT `event_resource_link_resource_fk` FOREIGN KEY (`resource_id`) REFERENCES `scheduler_resources` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+#EndIf
+
+#IfNotRow2D list_options list_id apptstat option_id AGDAV
+INSERT INTO `list_options` (`list_id`, `option_id`, `title`, `seq`, `notes`, `codes`, `modifier`, `activity`)
+VALUES ('apptstat', 'AGDAV', 'Aguardando avaliação', 55, '#0d6efd|0', '', '', 1);
+#EndIf
+
+#IfNotRow2D list_options list_id apptstat option_id PROCED
+INSERT INTO `list_options` (`list_id`, `option_id`, `title`, `seq`, `notes`, `codes`, `modifier`, `activity`)
+VALUES ('apptstat', 'PROCED', 'Em procedimento', 56, '#6610f2|0', '', '', 1);
+#EndIf
+
 #IfMissingColumn drugs unit_cost
 ALTER TABLE `drugs`
     ADD COLUMN `unit_cost` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT 'default internal cost per unit';

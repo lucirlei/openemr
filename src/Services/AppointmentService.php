@@ -45,6 +45,13 @@ class AppointmentService extends BaseService
      */
     private $patientService;
 
+    /**
+     * Cached resources for appointments keyed by event id.
+     *
+     * @var array<int, array<int, array<string, mixed>>>
+     */
+    private $resourceCache = [];
+
   /**
    * Default constructor.
    */
@@ -114,6 +121,41 @@ class AppointmentService extends BaseService
             }
             return true;
         });
+
+        $validator->optional('resources')->callback(function ($value) {
+            if (empty($value)) {
+                return true;
+            }
+            if (!is_array($value)) {
+                throw new InvalidValueException('resources must be provided as an array of identifiers', 'resources');
+            }
+            foreach ($value as $resourceId) {
+                $resourceId = (int)$resourceId;
+                if ($resourceId <= 0) {
+                    throw new InvalidValueException('resources must contain valid identifiers', 'resources');
+                }
+                $exists = QueryUtils::fetchSingleValue('SELECT id FROM scheduler_resources WHERE id = ?', 'id', [$resourceId]);
+                if (empty($exists)) {
+                    throw new InvalidValueException('resources contain an unknown identifier', 'resources');
+                }
+            }
+            return true;
+        });
+
+        $validator->optional('room_resource_id')->numeric()
+            ->callback(function ($value) {
+                if (empty($value)) {
+                    return true;
+                }
+                $resourceType = QueryUtils::fetchSingleValue('SELECT resource_type FROM scheduler_resources WHERE id = ?', 'resource_type', [$value]);
+                if (empty($resourceType)) {
+                    throw new InvalidValueException('room_resource_id must reference an existing scheduler resource', 'room_resource_id');
+                }
+                if ($resourceType !== 'room') {
+                    throw new InvalidValueException('room_resource_id must reference a resource of type room', 'room_resource_id');
+                }
+                return true;
+            });
 
         return $validator->validate($appointment);
     }
@@ -304,6 +346,22 @@ class AppointmentService extends BaseService
         $endTime = (new \DateTime())->setTimestamp($startUnixTime)->add($endTimeInterval);
         $uuid = (new UuidRegistry())->createUuid();
 
+        $resourceIds = [];
+        if (!empty($data['resources']) && is_array($data['resources'])) {
+            foreach ($data['resources'] as $resourceId) {
+                $resourceIds[] = (int)$resourceId;
+            }
+        }
+
+        $roomName = null;
+        if (!empty($data['room_resource_id'])) {
+            $roomResourceId = (int)$data['room_resource_id'];
+            if ($roomResourceId > 0) {
+                $resourceIds[] = $roomResourceId;
+                $roomName = QueryUtils::fetchSingleValue('SELECT name FROM scheduler_resources WHERE id = ?', 'name', [$roomResourceId]);
+            }
+        }
+
         $sql  = " INSERT INTO openemr_postcalendar_events SET";
         $sql .= "     uuid=?,";
         $sql .= "     pc_pid=?,";
@@ -340,6 +398,15 @@ class AppointmentService extends BaseService
                 $data["pc_aid"] ?? null
             )
         );
+
+        if (!empty($roomName)) {
+            QueryUtils::sqlStatementThrowException(
+                "UPDATE " . self::TABLE_NAME . " SET pc_room = ? WHERE pc_eid = ?",
+                [$roomName, $results]
+            );
+        }
+
+        $this->syncAppointmentResources((int)$results, $resourceIds);
 
         return $results;
     }
@@ -670,5 +737,109 @@ class AppointmentService extends BaseService
         }
         // TODO: look at handling offset and limit here
         return $processingResult;
+    }
+
+    /**
+     * @param int $eventId
+     * @return array
+     */
+    public function getResourcesForAppointment(int $eventId): array
+    {
+        if (isset($this->resourceCache[$eventId])) {
+            return $this->resourceCache[$eventId];
+        }
+
+        $records = QueryUtils::fetchRecords(
+            "SELECT erl.resource_id, sr.name, sr.resource_type, sr.facility_id, sr.color, sr.active " .
+            "FROM event_resource_link AS erl " .
+            "INNER JOIN scheduler_resources AS sr ON sr.id = erl.resource_id " .
+            "WHERE erl.event_id = ? ORDER BY sr.resource_type, sr.name",
+            [$eventId]
+        );
+
+        $this->resourceCache[$eventId] = $records ?: [];
+        return $this->resourceCache[$eventId];
+    }
+
+    public function syncAppointmentResources(int $eventId, array $resourceIds): void
+    {
+        $normalizedIds = array_values(array_unique(array_filter(array_map('intval', $resourceIds))));
+
+        $existingRecords = QueryUtils::fetchRecords(
+            "SELECT resource_id FROM event_resource_link WHERE event_id = ?",
+            [$eventId]
+        );
+
+        $existingIds = [];
+        if (!empty($existingRecords)) {
+            foreach ($existingRecords as $record) {
+                $existingIds[] = (int)$record['resource_id'];
+            }
+        }
+
+        $toDelete = array_diff($existingIds, $normalizedIds);
+        $toInsert = array_diff($normalizedIds, $existingIds);
+
+        if (!empty($toDelete)) {
+            $placeholders = implode(',', array_fill(0, count($toDelete), '?'));
+            QueryUtils::sqlStatementThrowException(
+                "DELETE FROM event_resource_link WHERE event_id = ? AND resource_id IN ($placeholders)",
+                array_merge([$eventId], $toDelete)
+            );
+        }
+
+        foreach ($toInsert as $resourceId) {
+            QueryUtils::sqlStatementThrowException(
+                "INSERT INTO event_resource_link (event_id, resource_id) VALUES (?, ?)",
+                [$eventId, $resourceId]
+            );
+        }
+
+        unset($this->resourceCache[$eventId]);
+    }
+
+    public function getResourceConflicts(array $resourceIds, string $eventDate, string $startTime, string $endTime, ?int $excludeEventId = null): array
+    {
+        $normalizedIds = array_values(array_unique(array_filter(array_map('intval', $resourceIds))));
+        if (empty($normalizedIds)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($normalizedIds), '?'));
+        $sql = "SELECT DISTINCT sr.id, sr.name " .
+            "FROM event_resource_link AS erl " .
+            "INNER JOIN openemr_postcalendar_events AS e ON e.pc_eid = erl.event_id " .
+            "INNER JOIN scheduler_resources AS sr ON sr.id = erl.resource_id " .
+            "WHERE erl.resource_id IN ($placeholders) " .
+            "AND e.pc_eventDate = ? " .
+            "AND e.pc_startTime < ? " .
+            "AND e.pc_endTime > ?";
+
+        $binds = array_merge($normalizedIds, [$eventDate, $endTime, $startTime]);
+        if (!empty($excludeEventId)) {
+            $sql .= " AND e.pc_eid <> ?";
+            $binds[] = $excludeEventId;
+        }
+
+        $records = QueryUtils::fetchRecords($sql, $binds);
+        if (empty($records)) {
+            return [];
+        }
+
+        $conflicts = [];
+        foreach ($records as $record) {
+            $conflicts[(int)$record['id']] = $record['name'];
+        }
+
+        return $conflicts;
+    }
+
+    protected function createResultRecordFromDatabaseResult($row)
+    {
+        $record = parent::createResultRecordFromDatabaseResult($row);
+        if (!empty($record['pc_eid'])) {
+            $record['resources'] = $this->getResourcesForAppointment((int)$record['pc_eid']);
+        }
+        return $record;
     }
 }

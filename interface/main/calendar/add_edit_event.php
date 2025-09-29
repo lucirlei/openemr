@@ -58,6 +58,7 @@ use OpenEMR\Events\Appointments\AppointmentSetEvent;
 use OpenEMR\Events\Appointments\AppointmentRenderEvent;
 use OpenEMR\Events\Appointments\AppointmentDialogCloseEvent;
 use OpenEMR\Common\Logging\SystemLogger;
+use OpenEMR\Services\AppointmentService;
 
  //Check access control
 if (!AclMain::aclCheckCore('patients', 'appt', '', array('write','wsome'))) {
@@ -371,6 +372,43 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "duplicate" || $_
          // when editing recurring events -- JRM Oct-08
          $event_date = $_POST['form_date'];
 
+        $canPersist = true;
+        $resourceIdsForCheck = $selectedResourceIds;
+        if (!empty($selectedRoomResourceId)) {
+            $resourceIdsForCheck[] = $selectedRoomResourceId;
+        }
+
+        if (!empty($resourceIdsForCheck)) {
+            $appointmentService = new AppointmentService();
+            $conflictingResources = $appointmentService->getResourceConflicts(
+                $resourceIdsForCheck,
+                $event_date,
+                $starttime,
+                $endtime,
+                $eid ?? null
+            );
+
+            if (!empty($conflictingResources)) {
+                $canPersist = false;
+                $conflictNames = array_map(static function ($name) {
+                    return trim((string)$name);
+                }, array_values($conflictingResources));
+                $info_msg = xlt('Unable to save. The following resources are unavailable:') . ' ' . implode(', ', $conflictNames);
+                $_POST['form_action'] = '';
+                (new SystemLogger())->notice('Scheduler resource conflict prevented appointment save', [
+                    'event_date' => $event_date,
+                    'start_time' => $starttime,
+                    'end_time' => $endtime,
+                    'resource_ids' => $resourceIdsForCheck,
+                    'conflicts' => $conflictNames,
+                    'user' => $_SESSION['authUserID'] ?? null,
+                    'appointment_id' => $eid ?? null,
+                ]);
+            }
+        }
+
+        if ($canPersist) {
+
          //If used new recurrence mechanism of set days every week
     if (!empty($_POST['days_every_week'])) {
         $my_recurrtype = 3;
@@ -635,6 +673,14 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
                     "pc_facility = '" . add_escape_custom((int)$_POST['facility']) . "' ,"  . // FF stuff
                     "pc_billing_location = '" . add_escape_custom((int)$_POST['billing_facility']) . "' "  .
                     "WHERE pc_aid = '" . add_escape_custom($provider) . "' AND pc_multiple = '" . add_escape_custom($row['pc_multiple'])  . "'");
+
+                    $providerEvents = sqlStatement(
+                        "SELECT pc_eid FROM openemr_postcalendar_events WHERE pc_aid = ? AND pc_multiple = ?",
+                        array($provider, $row['pc_multiple'])
+                    );
+                    while ($providerEvent = sqlFetchArray($providerEvents)) {
+                        sync_event_resources($providerEvent['pc_eid'], $_POST);
+                    }
                 } // foreach
             }
 
@@ -731,6 +777,7 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
                 "pc_facility = '" . add_escape_custom((int)$_POST['facility']) . "' ,"  . // FF stuff
                 "pc_billing_location = '" . add_escape_custom((int)$_POST['billing_facility']) . "' "  .
                 "WHERE pc_eid = '" . add_escape_custom($eid) . "'");
+                sync_event_resources($eid, $_POST);
             }
         }
 
@@ -759,6 +806,7 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
         // done with EVENT insert/update statements
 
         DOBandEncounter(isset($eid) ? $eid : null);
+        }
 } elseif (!empty($_POST['form_action']) && ($_POST['form_action'] == "delete")) { //    DELETE EVENT(s)
     $appointmentService = new \OpenEMR\Services\AppointmentService();
     $appointmentService->deleteAppointment($eid, $_POST['recurr_affect'], $_POST['selected_date']);
@@ -816,6 +864,51 @@ if (!empty($_REQUEST['groupid'])) {
 }
     $groupname = null;
     $group_statuses = getGroupStatuses();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['form_room_resource'])) {
+    $selectedRoom = getSchedulerResourceById((int)$_POST['form_room_resource']);
+    if (!empty($selectedRoom['name'])) {
+        $_POST['form_room'] = $selectedRoom['name'];
+    }
+}
+
+$selectedResourceIds = [];
+$selectedRoomResourceId = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!empty($_POST['form_resources'])) {
+        $selectedValues = is_array($_POST['form_resources']) ? $_POST['form_resources'] : [$_POST['form_resources']];
+        foreach ($selectedValues as $resourceId) {
+            $selectedResourceIds[] = (int)$resourceId;
+        }
+    }
+    if (isset($_POST['form_room_resource']) && $_POST['form_room_resource'] !== '') {
+        $selectedRoomResourceId = (int)$_POST['form_room_resource'];
+    }
+} elseif ($eid) {
+    $linkedResources = getEventSchedulerResources($eid);
+    foreach ($linkedResources as $linkedResource) {
+        if (($linkedResource['resource_type'] ?? '') === 'room') {
+            $selectedRoomResourceId = (int)$linkedResource['resource_id'];
+            $pcroom = $linkedResource['name'];
+        } else {
+            $selectedResourceIds[] = (int)$linkedResource['resource_id'];
+        }
+    }
+}
+
+$selectedResourceIds = array_values(array_unique(array_filter($selectedResourceIds)));
+
+$availableSchedulerResources = getSchedulerResources();
+$generalSchedulerResources = [];
+$roomSchedulerResources = [];
+foreach ($availableSchedulerResources as $schedulerResource) {
+    if (($schedulerResource['resource_type'] ?? '') === 'room') {
+        $roomSchedulerResources[] = $schedulerResource;
+    } else {
+        $generalSchedulerResources[] = $schedulerResource;
+    }
+}
 
  // If we are editing an existing event, then get its data.
 if ($eid) {
@@ -1586,6 +1679,42 @@ if ($_GET['group'] === true && $have_group_global_enabled) { ?>
     ?>
      </div>
  </div> <!-- Done with providers now scheduling -->
+
+<?php if (empty($_GET['prov'])) { ?>
+<div class="form-row mx-2">
+    <div class="col-sm form-group">
+        <label for="form_resources"><?php echo xlt('Resources'); ?>:</label>
+        <select class="form-control" name="form_resources[]" id="form_resources" multiple="multiple" size="5">
+            <?php foreach ($generalSchedulerResources as $resourceOption) { ?>
+                <option value="<?php echo attr($resourceOption['id']); ?>"<?php echo in_array((int)$resourceOption['id'], $selectedResourceIds, true) ? ' selected' : ''; ?>>
+                    <?php echo text($resourceOption['name']); ?><?php if (!empty($resourceOption['resource_type']) && $resourceOption['resource_type'] !== 'generic') { echo ' (' . text(ucfirst($resourceOption['resource_type'])) . ')'; } ?>
+                </option>
+            <?php } ?>
+        </select>
+        <?php if (empty($generalSchedulerResources)) { ?>
+            <small class="form-text text-muted"><?php echo xlt('No additional resources have been configured.'); ?></small>
+        <?php } else { ?>
+            <small class="form-text text-muted"><?php echo xlt('Hold Ctrl (Windows) or Command (macOS) to select multiple resources.'); ?></small>
+        <?php } ?>
+    </div>
+    <div class="col-sm form-group">
+        <label for="form_room_resource"><?php echo xlt('Room'); ?>:</label>
+        <select class="form-control" name="form_room_resource" id="form_room_resource">
+            <option value=""><?php echo xlt('None'); ?></option>
+            <?php foreach ($roomSchedulerResources as $roomOption) { ?>
+                <option value="<?php echo attr($roomOption['id']); ?>" data-resource-name="<?php echo attr($roomOption['name']); ?>"<?php echo ($selectedRoomResourceId === (int)$roomOption['id']) ? ' selected' : ''; ?>>
+                    <?php echo text($roomOption['name']); ?>
+                </option>
+            <?php } ?>
+        </select>
+        <?php if (!empty($pcroom) && empty($selectedRoomResourceId)) { ?>
+            <small class="form-text text-muted"><?php echo xlt('Current room'); ?>: <?php echo text($pcroom); ?></small>
+        <?php } ?>
+    </div>
+</div>
+<?php } ?>
+<input type="hidden" name="form_room" id="form_room" value="<?php echo attr($pcroom); ?>" data-legacy-room="<?php echo attr($pcroom); ?>">
+
 <?php
     //Check if repeat is using the new 'days every week' mechanism.
 function isDaysEveryWeek($repeat)
@@ -1746,16 +1875,6 @@ function isRegularRepeat($repeat)
             <?php echo $prefcat_options ?>
         </select>
     </div>
-
-<?php
-if (empty($_GET['prov'])) { ?>
-    <div class="col-sm form-group">
-        <label><?php echo xlt('Room Number'); ?>:</label>
-        <?php
-            echo generate_select_list('form_room', 'patient_flow_board_rooms', $pcroom, xl('Room Number'));
-        ?>
-    </div>
-    <?php } ?>
 </div><!-- status row -->
 <div class="form-row mx-2">
     <div class="col-sm form-group">
@@ -1850,7 +1969,10 @@ $(function () {
     });
     // add wanted classes to api generated elements.
     $("#form_apptstatus").addClass('form-control-sm');
-    $("#form_room").addClass('form-control-sm');
+    $("#form_room_resource").addClass('form-control-sm');
+    $("#form_resources").addClass('form-control-sm');
+    $("#form_room_resource").on('change', updateRoomNameFromResource);
+    updateRoomNameFromResource();
     $(".current a").addClass('active');
 
     /* Form init functions */
@@ -1860,6 +1982,26 @@ $(function () {
         set_category();
     <?php } ?>
 });
+
+function updateRoomNameFromResource() {
+    var roomSelect = $("#form_room_resource");
+    var hiddenRoom = $("#form_room");
+    if (!roomSelect.length || !hiddenRoom.length) {
+        return;
+    }
+
+    var selectedOption = roomSelect.find('option:selected');
+    if (selectedOption.length && selectedOption.val()) {
+        var resourceName = selectedOption.data('resourceName');
+        if (!resourceName) {
+            resourceName = selectedOption.text();
+        }
+        hiddenRoom.val(resourceName);
+    } else {
+        var legacyValue = hiddenRoom.data('legacyRoom');
+        hiddenRoom.val(legacyValue ? legacyValue : '');
+    }
+}
 
 function are_days_checked(){
     var days = document.getElementById("days").getElementsByTagName('input');

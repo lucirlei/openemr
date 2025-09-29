@@ -68,7 +68,94 @@ function getUserFacWH($uID, $fID)
     return $returnVal;
 }
 
- /**
+/**
+ * Fetch scheduler resources filtered by facility and/or resource type.
+ *
+ * @param int|null $facilityId
+ * @param string|array|null $resourceType
+ * @param bool $includeInactive
+ * @return array
+ */
+function getSchedulerResources($facilityId = null, $resourceType = null, $includeInactive = false)
+{
+    $sql = "SELECT id, name, resource_type, facility_id, color, active FROM scheduler_resources WHERE 1 = 1";
+    $binds = [];
+
+    if (!$includeInactive) {
+        $sql .= " AND active = 1";
+    }
+
+    if ($facilityId !== null && $facilityId !== '') {
+        $sql .= " AND (facility_id = ? OR facility_id IS NULL)";
+        $binds[] = $facilityId;
+    }
+
+    if (!empty($resourceType)) {
+        if (is_array($resourceType)) {
+            $placeholders = implode(',', array_fill(0, count($resourceType), '?'));
+            $sql .= " AND resource_type IN ($placeholders)";
+            foreach ($resourceType as $type) {
+                $binds[] = $type;
+            }
+        } else {
+            $sql .= " AND resource_type = ?";
+            $binds[] = $resourceType;
+        }
+    }
+
+    $sql .= " ORDER BY resource_type, name";
+
+    $statement = sqlStatement($sql, $binds);
+    $resources = [];
+    while ($row = sqlFetchArray($statement)) {
+        $resources[] = $row;
+    }
+
+    return $resources;
+}
+
+/**
+ * Retrieve a single scheduler resource by id.
+ *
+ * @param int $resourceId
+ * @return array|null
+ */
+function getSchedulerResourceById($resourceId)
+{
+    if (empty($resourceId)) {
+        return null;
+    }
+    $row = sqlQuery("SELECT id, name, resource_type, facility_id, color, active FROM scheduler_resources WHERE id = ?", [$resourceId]);
+    return $row ?: null;
+}
+
+/**
+ * Fetch resources associated to a calendar event.
+ *
+ * @param int $eventId
+ * @return array
+ */
+function getEventSchedulerResources($eventId)
+{
+    if (empty($eventId)) {
+        return [];
+    }
+
+    $sql = "SELECT erl.resource_id, sr.name, sr.resource_type, sr.facility_id, sr.color, sr.active "
+        . "FROM event_resource_link AS erl "
+        . "INNER JOIN scheduler_resources AS sr ON sr.id = erl.resource_id "
+        . "WHERE erl.event_id = ? ORDER BY sr.resource_type, sr.name";
+
+    $statement = sqlStatement($sql, [$eventId]);
+    $resources = [];
+    while ($row = sqlFetchArray($statement)) {
+        $resources[] = $row;
+    }
+
+    return $resources;
+}
+
+/**
  * Check if day is weekend day
  * @param (int) $day
  * @return boolean
