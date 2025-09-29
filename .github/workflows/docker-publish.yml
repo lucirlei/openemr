@@ -1,0 +1,80 @@
+# Nome do Workflow
+name: Build and Push OpenEMR Docker Image
+
+# Gatilhos (Triggers) - Quando o workflow deve rodar
+on:
+  # 1. Roda quando houver um push no branch 'main'
+  push:
+    branches: [ 'main' ]
+  
+  # 2. Roda quando uma nova Release for criada no GitHub
+  release:
+    types: [ created ]
+
+  # 3. Permite que você rode este workflow manualmente pela aba "Actions"
+  workflow_dispatch:
+
+# Variáveis de ambiente para facilitar a personalização
+env:
+  # TODO: Troque para o seu registro. Ex: ghcr.io
+  REGISTRY: docker.io
+  # TODO: Troque 'seu-usuario' pelo seu nome de usuário no Docker Hub
+  IMAGE_NAME: seu-usuario/openemr
+
+# Definição dos Jobs (Tarefas)
+jobs:
+  build-and-push:
+    # Rodar em um ambiente Ubuntu mais recente
+    runs-on: ubuntu-latest
+    
+    # Permissões necessárias para o job
+    permissions:
+      contents: read
+      packages: write
+
+    # Passos que o job executará
+    steps:
+      # 1. Clona o repositório para dentro do ambiente de execução
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Faz o login no registro de contêineres (Docker Hub)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 3. Extrai metadados (tags e labels) da imagem de forma inteligente
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Gera a tag 'latest' para o branch principal
+            type=ref,event=branch
+            # Gera tags semânticas para releases (ex: v1.2.3 -> 1.2.3, 1.2, 1)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # Gera tag com o hash do commit
+            type=sha
+
+      # 4. Configura o Docker Buildx para builds otimizadas
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 5. Constrói a imagem e publica no registro
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          # Não publica a imagem em pull requests
+          push: ${{ github.event_name != 'pull_request' }}
+          # Usa as tags geradas no passo 3
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Habilita cache para acelerar builds futuras
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
