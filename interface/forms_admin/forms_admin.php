@@ -69,9 +69,14 @@ $bigdata = getRegistered("%") or $bigdata = false;
 
     <div class="container-fluid">
         <!-- Page header -->
-        <div class="row">
-            <div class="col-12">
-                <h2 class="title"><?php echo xlt('Forms Administration');?></h2>
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2 class="title mb-0"><?php echo xlt('Forms Administration');?></h2>
+            </div>
+            <div class="col-md-4 text-md-right mt-2 mt-md-0">
+                <a class="btn btn-outline-primary btn-sm" href="<?php echo $web_root; ?>/interface/forms_admin/lbf_template_wizard.php">
+                    <i class="fas fa-magic mr-1"></i><?php echo xlt('Assistente LBF'); ?>
+                </a>
             </div>
         </div>
         <!-- Form table -->

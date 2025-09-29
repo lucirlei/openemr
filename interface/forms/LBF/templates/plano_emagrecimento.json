@@ -1,0 +1,182 @@
+{
+  "form_id": "LBFemag",
+  "title": "Plano de Emagrecimento",
+  "category": "Programas",
+  "description": "Planejamento multidisciplinar com metas e follow-up",
+  "groups": [
+    {
+      "id": "",
+      "title": "Plano de Emagrecimento",
+      "subtitle": "Estrutura do programa",
+      "sequence": 5,
+      "columns": 2,
+      "mapping": "Programas de Emagrecimento"
+    },
+    {
+      "id": "1METAS",
+      "title": "Metas SMART",
+      "sequence": 10,
+      "columns": 2
+    },
+    {
+      "id": "2INTER",
+      "title": "Intervenções",
+      "sequence": 20,
+      "columns": 2
+    },
+    {
+      "id": "3FOLLOW",
+      "title": "Follow-up",
+      "sequence": 30,
+      "columns": 2
+    },
+    {
+      "id": "4RISKS",
+      "title": "Checklist de Riscos",
+      "sequence": 40,
+      "columns": 1
+    }
+  ],
+  "fields": [
+    {
+      "id": "start_weight",
+      "group": "1METAS",
+      "title": "Peso inicial (kg)",
+      "sequence": 10,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6
+    },
+    {
+      "id": "goal_weight",
+      "group": "1METAS",
+      "title": "Peso meta (kg)",
+      "sequence": 20,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6
+    },
+    {
+      "id": "target_date",
+      "group": "1METAS",
+      "title": "Data objetivo",
+      "sequence": 30,
+      "data_type": 4,
+      "uor": 1,
+      "length": 10,
+      "max_length": 10
+    },
+    {
+      "id": "motivation",
+      "group": "1METAS",
+      "title": "Motivações",
+      "sequence": 40,
+      "data_type": 3,
+      "uor": 2,
+      "length": 60,
+      "rows": 4,
+      "max_length": 255
+    },
+    {
+      "id": "nutrition_plan",
+      "group": "2INTER",
+      "title": "Plano nutricional",
+      "sequence": 10,
+      "data_type": 3,
+      "uor": 1,
+      "length": 60,
+      "rows": 4,
+      "max_length": 255
+    },
+    {
+      "id": "physical_activity",
+      "group": "2INTER",
+      "title": "Atividade física",
+      "sequence": 20,
+      "data_type": 3,
+      "uor": 1,
+      "length": 60,
+      "rows": 4,
+      "max_length": 255
+    },
+    {
+      "id": "support_therapy",
+      "group": "2INTER",
+      "title": "Terapias de suporte",
+      "sequence": 30,
+      "data_type": 3,
+      "uor": 2,
+      "length": 60,
+      "rows": 4,
+      "max_length": 255
+    },
+    {
+      "id": "follow_frequency",
+      "group": "3FOLLOW",
+      "title": "Periodicidade de follow-up",
+      "sequence": 10,
+      "data_type": 2,
+      "uor": 1,
+      "length": 30,
+      "max_length": 60
+    },
+    {
+      "id": "follow_channel",
+      "group": "3FOLLOW",
+      "title": "Canais de acompanhamento",
+      "sequence": 20,
+      "data_type": 3,
+      "uor": 2,
+      "length": 60,
+      "rows": 3,
+      "max_length": 255
+    },
+    {
+      "id": "follow_notes",
+      "group": "3FOLLOW",
+      "title": "Notas de evolução",
+      "sequence": 30,
+      "data_type": 3,
+      "uor": 2,
+      "length": 60,
+      "rows": 4,
+      "max_length": 255
+    },
+    {
+      "id": "risk_screening",
+      "group": "4RISKS",
+      "title": "Riscos identificados",
+      "sequence": 10,
+      "data_type": 3,
+      "uor": 1,
+      "length": 60,
+      "rows": 5,
+      "max_length": 255,
+      "description": "Checklist de fatores de risco"
+    },
+    {
+      "id": "contraindications",
+      "group": "4RISKS",
+      "title": "Contraindicações",
+      "sequence": 20,
+      "data_type": 3,
+      "uor": 2,
+      "length": 60,
+      "rows": 4,
+      "max_length": 255
+    }
+  ],
+  "consents": [
+    {
+      "title": "Consentimento - Programa de Emagrecimento",
+      "document_key": "consentimento_plano_emagrecimento",
+      "risks": [
+        "Exige adesão às orientações nutricionais e de atividade física",
+        "Resultados variam conforme metabolismo individual",
+        "Possibilidade de efeitos colaterais em suplementos e medicamentos prescritos"
+      ]
+    }
+  ]
+}
