@@ -3,15 +3,10 @@ name: Build and Push OpenEMR Docker Image
 
 # Gatilhos (Triggers) - Quando o workflow deve rodar
 on:
-  # 1. Roda quando houver um push no branch 'main'
   push:
     branches: [ 'main' ]
-  
-  # 2. Roda quando uma nova Release for criada no GitHub
   release:
     types: [ created ]
-
-  # 3. Permite que você rode este workflow manualmente pela aba "Actions"
   workflow_dispatch:
 
 # Variáveis de ambiente para facilitar a personalização
@@ -52,13 +47,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Gera a tag 'latest' para o branch principal
             type=ref,event=branch
-            # Gera tags semânticas para releases (ex: v1.2.3 -> 1.2.3, 1.2, 1)
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            # Gera tag com o hash do commit
             type=sha
 
       # 4. Configura o Docker Buildx para builds otimizadas
@@ -70,11 +62,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          # Não publica a imagem em pull requests
+          # A linha abaixo especifica o caminho exato para o Dockerfile.
+          # É redundante se o arquivo estiver na raiz, mas torna a intenção mais clara.
+          file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          # Usa as tags geradas no passo 3
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Habilita cache para acelerar builds futuras
           cache-from: type=gha
           cache-to: type=gha,mode=max
