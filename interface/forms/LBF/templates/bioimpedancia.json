@@ -1,0 +1,147 @@
+{
+  "form_id": "LBFbioimp",
+  "title": "Bioimpedância Corporal",
+  "category": "Estética",
+  "description": "Avaliação de composição corporal com alertas metabólicos",
+  "groups": [
+    {
+      "id": "",
+      "title": "Bioimpedância Corporal",
+      "subtitle": "Avaliação inicial",
+      "sequence": 10,
+      "columns": 2,
+      "mapping": "Avaliações Estéticas"
+    },
+    {
+      "id": "1METRIC",
+      "title": "Métricas Antropométricas",
+      "sequence": 20,
+      "columns": 2
+    },
+    {
+      "id": "2COMPOS",
+      "title": "Composição Corporal",
+      "sequence": 30,
+      "columns": 2
+    },
+    {
+      "id": "3ALERTS",
+      "title": "Alertas Clínicos",
+      "sequence": 40,
+      "columns": 1
+    }
+  ],
+  "fields": [
+    {
+      "id": "weight",
+      "group": "1METRIC",
+      "title": "Peso (kg)",
+      "sequence": 10,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6,
+      "description": "Peso atual"
+    },
+    {
+      "id": "height",
+      "group": "1METRIC",
+      "title": "Altura (cm)",
+      "sequence": 20,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6,
+      "description": "Altura em centímetros"
+    },
+    {
+      "id": "bmi",
+      "group": "1METRIC",
+      "title": "IMC",
+      "sequence": 30,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6,
+      "description": "Índice de massa corporal"
+    },
+    {
+      "id": "basal",
+      "group": "2COMPOS",
+      "title": "Taxa metabólica basal (kcal)",
+      "sequence": 10,
+      "data_type": 2,
+      "uor": 1,
+      "length": 8,
+      "max_length": 8,
+      "description": "Taxa metabólica estimada"
+    },
+    {
+      "id": "bodyfat",
+      "group": "2COMPOS",
+      "title": "% Gordura",
+      "sequence": 20,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6,
+      "description": "Percentual de gordura corporal"
+    },
+    {
+      "id": "leanmass",
+      "group": "2COMPOS",
+      "title": "Massa magra (kg)",
+      "sequence": 30,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6,
+      "description": "Massa magra total"
+    },
+    {
+      "id": "hydration",
+      "group": "2COMPOS",
+      "title": "Hidratação (%)",
+      "sequence": 40,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6,
+      "description": "Percentual de água corporal"
+    },
+    {
+      "id": "visceral",
+      "group": "3ALERTS",
+      "title": "Gordura visceral",
+      "sequence": 10,
+      "data_type": 2,
+      "uor": 2,
+      "length": 50,
+      "max_length": 100,
+      "description": "Observações sobre gordura visceral"
+    },
+    {
+      "id": "metabolic_flags",
+      "group": "3ALERTS",
+      "title": "Alertas metabólicos",
+      "sequence": 20,
+      "data_type": 3,
+      "uor": 2,
+      "length": 60,
+      "rows": 3,
+      "max_length": 255,
+      "description": "Recomendações clínicas"
+    }
+  ],
+  "consents": [
+    {
+      "title": "Consentimento - Bioimpedância",
+      "document_key": "consentimento_bioimpedancia",
+      "risks": [
+        "Contraindicação para gestantes, portadores de marcapasso ou dispositivos eletrônicos implantáveis",
+        "Resultados influenciados por hidratação, ciclo menstrual e ingestão de cafeína",
+        "Requer jejum mínimo de 3 horas e bexiga vazia"
+      ]
+    }
+  ]
+}

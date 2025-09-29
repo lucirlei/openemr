@@ -1,0 +1,160 @@
+{
+  "form_id": "LBFcorpaval",
+  "title": "Avaliação Corporal Estética",
+  "category": "Estética",
+  "description": "Checklist fotográfico e medidas antropométricas",
+  "groups": [
+    {
+      "id": "",
+      "title": "Avaliação Corporal Estética",
+      "subtitle": "Pré-procedimento",
+      "sequence": 5,
+      "columns": 2,
+      "mapping": "Avaliações Estéticas"
+    },
+    {
+      "id": "1PHOTOS",
+      "title": "Registro Fotográfico",
+      "sequence": 10,
+      "columns": 1
+    },
+    {
+      "id": "2MEAS",
+      "title": "Medidas",
+      "sequence": 20,
+      "columns": 2
+    },
+    {
+      "id": "3SKIN",
+      "title": "Condição da Pele",
+      "sequence": 30,
+      "columns": 2
+    },
+    {
+      "id": "4EXPECT",
+      "title": "Expectativas e Observações",
+      "sequence": 40,
+      "columns": 1
+    }
+  ],
+  "fields": [
+    {
+      "id": "photo_front",
+      "group": "1PHOTOS",
+      "title": "Foto frontal",
+      "sequence": 10,
+      "data_type": 35,
+      "uor": 2,
+      "length": 0,
+      "max_length": 0,
+      "description": "Upload da foto frontal",
+      "edit_options": "I"
+    },
+    {
+      "id": "photo_side",
+      "group": "1PHOTOS",
+      "title": "Foto perfil",
+      "sequence": 20,
+      "data_type": 35,
+      "uor": 2,
+      "length": 0,
+      "max_length": 0,
+      "description": "Upload da foto de perfil",
+      "edit_options": "I"
+    },
+    {
+      "id": "waist",
+      "group": "2MEAS",
+      "title": "Cintura (cm)",
+      "sequence": 10,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6
+    },
+    {
+      "id": "hip",
+      "group": "2MEAS",
+      "title": "Quadril (cm)",
+      "sequence": 20,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6
+    },
+    {
+      "id": "thigh",
+      "group": "2MEAS",
+      "title": "Coxa (cm)",
+      "sequence": 30,
+      "data_type": 2,
+      "uor": 1,
+      "length": 6,
+      "max_length": 6
+    },
+    {
+      "id": "flaccidity",
+      "group": "3SKIN",
+      "title": "Flacidez",
+      "sequence": 10,
+      "data_type": 1,
+      "uor": 1,
+      "list_id": "yesno",
+      "description": "Avaliação da flacidez cutânea"
+    },
+    {
+      "id": "stretch_marks",
+      "group": "3SKIN",
+      "title": "Estrias",
+      "sequence": 20,
+      "data_type": 1,
+      "uor": 1,
+      "list_id": "yesno",
+      "description": "Presença de estrias"
+    },
+    {
+      "id": "skin_notes",
+      "group": "3SKIN",
+      "title": "Observações pele",
+      "sequence": 30,
+      "data_type": 3,
+      "uor": 2,
+      "length": 60,
+      "rows": 4,
+      "max_length": 255
+    },
+    {
+      "id": "goals",
+      "group": "4EXPECT",
+      "title": "Objetivos do paciente",
+      "sequence": 10,
+      "data_type": 3,
+      "uor": 1,
+      "length": 60,
+      "rows": 4,
+      "max_length": 255
+    },
+    {
+      "id": "plan_notes",
+      "group": "4EXPECT",
+      "title": "Plano sugerido",
+      "sequence": 20,
+      "data_type": 3,
+      "uor": 2,
+      "length": 60,
+      "rows": 4,
+      "max_length": 255
+    }
+  ],
+  "consents": [
+    {
+      "title": "Consentimento - Avaliação Corporal",
+      "document_key": "consentimento_avaliacao_corporal",
+      "risks": [
+        "Autorização para registro fotográfico antes e depois dos procedimentos",
+        "Imagens utilizadas apenas para acompanhamento clínico, salvo autorização expressa",
+        "Confirma ciência sobre possibilidade de desconforto durante medições"
+      ]
+    }
+  ]
+}
