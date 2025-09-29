@@ -1,0 +1,43 @@
+{% extends "patient/card/card_base.html.twig" %}
+{% if (prependedInjection is defined) or (appendedInjection is defined) %}
+    {% import "patient/macros/card.macro.twig" as cardMacros %}
+    {% set prepend = cardMacros.injectedContent(prependedInjection) %}
+    {% set append = cardMacros.injectedContent(appendedInjection) %}
+{% endif %}
+{% block content %}
+    <div class="px-1">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex w-100 text-center">
+                <div class="flex-fill">
+                    <div class="h5 mb-0">{{ summary.active_count|default(0) }}</div>
+                    <small class="text-muted">{{ 'Active Packages'|xlt }}</small>
+                </div>
+                <div class="flex-fill">
+                    <div class="h5 mb-0">{{ summary.upcoming_session.date|default('-') }}</div>
+                    <small class="text-muted">{{ 'Next Session'|xlt }}</small>
+                </div>
+                <div class="flex-fill">
+                    <div class="h5 mb-0">{{ summary.next_billing.amount is defined ? summary.next_billing.amount|oeFormatMoney : '-' }}</div>
+                    <small class="text-muted">{{ 'Next Billing'|xlt }}</small>
+                </div>
+            </div>
+            <a class="btn btn-sm btn-outline-primary ms-2" href="{{ detailUrl|attr }}" target="_blank">
+                <i class="fa fa-external-link"></i> {{ 'Manage'|xlt }}
+            </a>
+        </div>
+        <hr class="my-2" />
+        {% if summary.recent_sessions is not empty %}
+            <ul class="list-unstyled mb-0">
+                {% for session in summary.recent_sessions %}
+                    <li class="mb-1">
+                        <strong>{{ session.package_name }}</strong>
+                        <div class="small text-muted">{{ session.session_date }}</div>
+                        {% if session.notes %}<div class="small">{{ session.notes }}</div>{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted mb-0">{{ 'No recent sessions recorded.'|xlt }}</p>
+        {% endif %}
+    </div>
+{% endblock %}
