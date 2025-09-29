@@ -56,9 +56,14 @@ use OpenEMR\Billing\BillingUtilities;
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Twig\TwigContainer;
+use OpenEMR\Common\Logging\SystemLogger;
 use OpenEMR\Core\Header;
 use OpenEMR\OeUI\OemrUI;
 use OpenEMR\Services\FacilityService;
+use OpenEMR\Services\Checkout\CheckoutService;
+use OpenEMR\Services\Checkout\Exception\PaymentProcessingException;
+use OpenEMR\Services\Checkout\PaymentGatewayManager;
+use OpenEMR\Services\Checkout\PaymentLedgerService;
 
 if (!AclMain::aclCheckCore('acct', 'bill', '', 'write')) {
     echo (new TwigContainer(null, $GLOBALS['kernel']))->getTwig()->render('core/unauthorized.html.twig', ['pageTitle' => xl("Patient Checkout")]);
@@ -66,6 +71,10 @@ if (!AclMain::aclCheckCore('acct', 'bill', '', 'write')) {
 }
 
 $facilityService = new FacilityService();
+$checkoutLogger = new SystemLogger();
+$paymentGatewayManager = new PaymentGatewayManager($checkoutLogger);
+$paymentLedgerService = new PaymentLedgerService($checkoutLogger);
+$checkoutService = new CheckoutService($paymentGatewayManager, $paymentLedgerService, $checkoutLogger);
 
 $currdecimals = $GLOBALS['currency_decimals'];
 
@@ -212,6 +221,7 @@ function generate_receipt($patient_id, $encounter = 0): void
         }
 
         </script>
+
         <style>
         @media (min-width: 992px){
             .modal-lg {
@@ -443,8 +453,7 @@ function generate_receipt($patient_id, $encounter = 0): void
                             <td style="border:none !important">&nbsp;</td>
                             <td style="border:none !important">&nbsp;</td>
                             <td style="border:none !important">&nbsp;</td>
-                            <td class="font-weight-bold text-right bg-blue" style="border: 1px solid;"><?php echo xlt('Balance Due'); ?></td>
-                            <td class='text-right bg-blue' style="border: 1px solid;"><?php echo text(oeFormatMoney($charges, true)) ?></td>
+                            <td class="font-weight-bold text-right bg-blue" style="border: 1px solid;" colspan='2'><?php echo xlt('Balance Due'); ?>: <?php echo text(oeFormatMoney($charges, true)) ?></td>
                         </tr>
                     </table>
                 </div>
@@ -496,15 +505,18 @@ function generate_receipt($patient_id, $encounter = 0): void
         if ($code_type == 'COPAY' && !$description) {
             $description = xl('Payment');
         }
-        echo " <tr>\n";
+        echo " <tr class='checkout-line' data-line-index='" . attr($lino) . "'>\n";
         echo "  <td>" . text(oeFormatShortDate($date));
         echo "<input type='hidden' name='line[$lino][code_type]' value='" . attr($code_type) . "' />";
+        echo "<input type='hidden' name='line[$lino][billing_code_type]' value='" . attr($code_type) . "' />";
         echo "<input type='hidden' name='line[$lino][code]' value='" . attr($code) . "' />";
         echo "<input type='hidden' name='line[$lino][id]' value='" . attr($id) . "' />";
         echo "<input type='hidden' name='line[$lino][description]' value='" . attr($description) . "' />";
         echo "<input type='hidden' name='line[$lino][taxrates]' value='" . attr($taxrates) . "' />";
         echo "<input type='hidden' name='line[$lino][price]' value='" . attr($price) . "' />";
         echo "<input type='hidden' name='line[$lino][units]' value='" . attr($units) . "' />";
+        echo "<input type='hidden' name='line[$lino][is_new]' value='0' />";
+        echo "<input type='hidden' name='line[$lino][is_deleted]' value='0' />";
         echo "</td>\n";
         echo "  <td>" . text($description) . "</td>";
         echo "  <td class='text-right'>" . text($units) . "</td>";
@@ -515,6 +527,7 @@ function generate_receipt($patient_id, $encounter = 0): void
         echo "  readonly";
         // else echo " style='text-align:right' onkeyup='computeTotals()'";
         echo "></td>\n";
+        echo "  <td class='text-center'><button type='button' class='btn btn-link text-danger p-0 d-none' data-remove-line='" . attr($lino) . "' aria-label='" . attr(xlt('Remove line')) . "'>&times;</button></td>\n";
         echo " </tr>\n";
         ++$lino;
     }
@@ -565,16 +578,23 @@ function generate_receipt($patient_id, $encounter = 0): void
         }
     }
 
-    $payment_methods = array(
-        'Cash',
-        'Check',
-        'MC',
-        'VISA',
-        'AMEX',
-        'DISC',
-        'Other');
-
     $alertmsg = ''; // anything here pops up in an alert box
+
+    $payment_method_options = array();
+    $paymentMethodRes = sqlStatement(
+        "SELECT option_id, title, is_default FROM list_options WHERE list_id = ? ORDER BY seq, title",
+        array('payment_method')
+    );
+    while ($methodRow = sqlFetchArray($paymentMethodRes)) {
+        if ($methodRow['option_id'] == 'electronic' || $methodRow['option_id'] == 'bank_draft') {
+            continue;
+        }
+        $payment_method_options[] = array(
+            'value' => $methodRow['option_id'],
+            'label' => xl_list_label($methodRow['title']),
+            'is_default' => !empty($methodRow['is_default'])
+        );
+    }
 
     // If the Save button was clicked...
     //
@@ -623,22 +643,56 @@ function generate_receipt($patient_id, $encounter = 0): void
           "code_type = 'TAX'", array($form_pid,$form_encounter));
 
         $form_amount = $_POST['form_amount'];
-        $lines = $_POST['line'];
+        $lines = $_POST['line'] ?? array();
+        if (!is_array($lines)) {
+            $lines = array();
+        }
 
-        for ($lino = 0; $lines[$lino]['code_type']; ++$lino) {
-            $line = $lines[$lino];
+        $totalDue = 0.00;
+        $providerForNewItems = $_POST['form_provider'] ?? '';
+
+        foreach ($lines as $line) {
+            if (empty($line['code_type'])) {
+                continue;
+            }
+            if (!empty($line['is_deleted']) && (int)$line['is_deleted'] === 1) {
+                continue;
+            }
+
             $code_type = $line['code_type'];
-            $id        = $line['id'];
-            $amount    = sprintf('%01.2f', trim($line['amount']));
+            $billingCodeType = $line['billing_code_type'] ?? $code_type;
+            $id        = $line['id'] ?? '';
+            $amount    = sprintf('%01.2f', trim((string)($line['amount'] ?? 0)));
+            $totalDue += (float)$amount;
 
+            if (!empty($line['is_new'])) {
+                $units = !empty($line['units']) ? (float)$line['units'] : 1;
+                $description = $line['description'] ?? '';
+                BillingUtilities::addBilling(
+                    $form_encounter,
+                    $billingCodeType,
+                    $line['code'] ?? '',
+                    $description,
+                    $form_pid,
+                    '1',
+                    $providerForNewItems,
+                    '',
+                    $units,
+                    $amount,
+                    '',
+                    '',
+                    1
+                );
+                continue;
+            }
 
-            if ($code_type == 'PROD') {
+            if ($billingCodeType == 'PROD') {
                 // Product sales. The fee and encounter ID may have changed.
                 $query = "update drug_sales SET fee = ?, " .
                 "encounter = ?, billed = 1 WHERE " .
                 "sale_id = ?";
                 sqlQuery($query, array($amount,$form_encounter,$id));
-            } elseif ($code_type == 'TAX') {
+            } elseif ($billingCodeType == 'TAX') {
                 // In the SL case taxes show up on the invoice as line items.
                 // Otherwise we gotta save them somewhere, and in the billing
                 // table with a code type of TAX seems easiest.
@@ -706,41 +760,62 @@ function generate_receipt($patient_id, $encounter = 0): void
             sqlCommitTrans();
         }
 
-      // Post payment.
-        if ($_POST['form_amount']) {
-            $amount  = sprintf('%01.2f', trim($_POST['form_amount']));
-            $form_source = trim($_POST['form_source']);
-            $paydesc = trim($_POST['form_method']);
-            //Fetching the existing code and modifier
-                $ResultSearchNew = sqlStatement(
-                    "SELECT * FROM billing LEFT JOIN code_types ON billing.code_type=code_types.ct_key " .
-                    "WHERE code_types.ct_fee=1 AND billing.activity!=0 AND billing.pid =? AND encounter=? ORDER BY billing.code,billing.modifier",
-                    array($form_pid,$form_encounter)
-                );
+      // Post payment(s).
+        $paymentsPayload = array();
+        if (!empty($_POST['form_payments'])) {
+            $decodedPayments = json_decode($_POST['form_payments'], true);
+            if (is_array($decodedPayments)) {
+                $paymentsPayload = $decodedPayments;
+            }
+        }
+
+        if (empty($paymentsPayload) && !empty($_POST['form_amount'])) {
+            $paymentsPayload[] = array(
+                'amount' => sprintf('%01.2f', trim((string)$_POST['form_amount'])),
+                'reference' => trim($_POST['form_source'] ?? ''),
+                'method' => trim($_POST['form_method'] ?? ''),
+                'installments' => 1
+            );
+        }
+
+        $Codetype = '';
+        $Code = '';
+        $Modifier = '';
+        if (!empty($paymentsPayload)) {
+            $ResultSearchNew = sqlStatement(
+                "SELECT * FROM billing LEFT JOIN code_types ON billing.code_type=code_types.ct_key " .
+                "WHERE code_types.ct_fee=1 AND billing.activity!=0 AND billing.pid =? AND encounter=? ORDER BY billing.code,billing.modifier",
+                array($form_pid,$form_encounter)
+            );
             if ($RowSearch = sqlFetchArray($ResultSearchNew)) {
-                              $Codetype = $RowSearch['code_type'];
+                $Codetype = $RowSearch['code_type'];
                 $Code = $RowSearch['code'];
                 $Modifier = $RowSearch['modifier'];
-            } else {
-                              $Codetype = '';
-                $Code = '';
-                $Modifier = '';
             }
-              $session_id = sqlInsert(
-                  "INSERT INTO ar_session (payer_id,user_id,reference,check_date,deposit_date,pay_total," .
-                  " global_amount,payment_type,description,patient_id,payment_method,adjustment_code,post_to_date) " .
-                  " VALUES ('0',?,?,now(),?,?,'','patient','COPAY',?,?,'patient_payment',now())",
-                  array($_SESSION['authUserID'],$form_source,$dosdate,$amount,$form_pid,$paydesc)
-              );
 
-              sqlBeginTrans();
-              $sequence_no = sqlQuery("SELECT IFNULL(MAX(sequence_no),0) + 1 AS increment FROM ar_activity WHERE pid = ? AND encounter = ?", array($form_pid, $form_encounter));
-              $insrt_id = sqlInsert(
-                  "INSERT INTO ar_activity (pid,encounter,sequence_no,code_type,code,modifier,payer_type,post_time,post_user,session_id,pay_amount,account_code)" .
-                  " VALUES (?,?,?,?,?,?,0,?,?,?,?,'PCP')",
-                  array($form_pid,$form_encounter,$sequence_no['increment'],$Codetype,$Code,$Modifier,$this_bill_date,$_SESSION['authUserID'],$session_id,$amount)
-              );
-              sqlCommitTrans();
+            try {
+                $checkoutService->processPayments(
+                    (int)$form_pid,
+                    (int)$form_encounter,
+                    $paymentsPayload,
+                    $dosdate,
+                    $this_bill_date,
+                    array(
+                        'code_type' => $Codetype,
+                        'code' => $Code,
+                        'modifier' => $Modifier
+                    )
+                );
+            } catch (PaymentProcessingException $exception) {
+                $checkoutLogger->error($exception->getMessage(), ['exception' => $exception]);
+                $_SESSION['checkout_error'] = $exception->getMessage();
+                $redirectUrl = 'pos_checkout.php?ptid=' . urlencode((string)$form_pid);
+                if (!empty($_GET['framed'])) {
+                    $redirectUrl .= '&framed=1';
+                }
+                header("Location: " . $redirectUrl);
+                exit();
+            }
         }
 
       // If applicable, set the invoice reference number.
@@ -785,6 +860,22 @@ function generate_receipt($patient_id, $encounter = 0): void
       "ORDER BY s.encounter DESC, s.sale_id ASC";
     $dres = sqlStatement($query, array($patient_id));
 
+    $aesthetic_kits = array();
+    $kitRes = sqlStatement(
+        "SELECT option_id, title, option_value, notes FROM list_options WHERE list_id = ? AND activity = 1 ORDER BY seq, title",
+        array('aesthetic_kits')
+    );
+    while ($kitRow = sqlFetchArray($kitRes)) {
+        $rawItems = trim((string)($kitRow['notes'] ?? ''));
+        $items = $rawItems === '' ? array() : array_filter(array_map('trim', explode(',', $rawItems)));
+        $aesthetic_kits[] = array(
+            'id' => $kitRow['option_id'],
+            'label' => xl_list_label($kitRow['title']),
+            'price' => (float)$kitRow['option_value'],
+            'items' => $items
+        );
+    }
+
     // If there are none, just redisplay the last receipt and exit.
     //
     if (sqlNumRows($bres) == 0 && sqlNumRows($dres) == 0) {
@@ -817,73 +908,79 @@ function generate_receipt($patient_id, $encounter = 0): void
 
             <?php require($GLOBALS['srcdir'] . "/restoreSession.php"); ?>
 
-            // This clears the tax line items in preparation for recomputing taxes.
+            var checkoutNextLineIndex = <?php echo js_escape($lino); ?>;
+            var checkoutInvoiceTotal = 0;
+            var checkoutPaymentIndex = 0;
+            var checkoutPaymentOptions = <?php echo json_encode($payment_method_options, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+            var checkoutKits = <?php echo json_encode($aesthetic_kits, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+            var gatewayOptions = [
+                {value: '', label: '<?php echo xlt('No Gateway'); ?>'},
+                {value: 'stripe', label: 'Stripe'},
+                {value: 'pagseguro', label: 'PagSeguro'}
+            ];
+
             function clearTax(visible) {
                 var f = document.forms[0];
                 for (var lino = 0; true; ++lino) {
                     var pfx = 'line[' + lino + ']';
-                    if (! f[pfx + '[code_type]']) {
-                        break
-                    };
-                    if (f[pfx + '[code_type]'].value != 'TAX') {
-                        continue
-                    };
+                    if (!f[pfx + '[code_type]']) {
+                        break;
+                    }
+                    if (f[pfx + '[code_type]'].value !== 'TAX') {
+                        continue;
+                    }
                     f[pfx + '[price]'].value = '0.00';
                     if (visible) {
-                        f[pfx + '[amount]'].value = '0.00'
-                    };
+                        f[pfx + '[amount]'].value = '0.00';
+                    }
                 }
             }
 
-            // For a given tax ID and amount, compute the tax on that amount and add it
-            // to the "price" (same as "amount") of the corresponding tax line item.
-            // Note the tax line items include their "taxrate" to make this easy.
             function addTax(rateid, amount, visible) {
-                if (rateid.length == 0) {
-                    return 0
-                };
+                if (rateid.length === 0) {
+                    return 0;
+                }
                 var f = document.forms[0];
                 for (var lino = 0; true; ++lino) {
                     var pfx = 'line[' + lino + ']';
-                    if (! f[pfx + '[code_type]']) {
-                        break
-                    };
-                    if (f[pfx + '[code_type]'].value != 'TAX') {
-                        continue
-                    };
-                    if (f[pfx + '[code]'].value != rateid) {
-                        continue
-                    };
+                    if (!f[pfx + '[code_type]']) {
+                        break;
+                    }
+                    if (f[pfx + '[code_type]'].value !== 'TAX') {
+                        continue;
+                    }
+                    if (f[pfx + '[code]'].value !== rateid) {
+                        continue;
+                    }
                     var tax = amount * parseFloat(f[pfx + '[taxrates]'].value);
                     tax = parseFloat(tax.toFixed(<?php echo js_escape($currdecimals); ?>));
                     var cumtax = parseFloat(f[pfx + '[price]'].value) + tax;
-                    f[pfx + '[price]'].value  = cumtax.toFixed(<?php echo js_escape($currdecimals); ?>); // requires JS 1.5
+                    f[pfx + '[price]'].value = cumtax.toFixed(<?php echo js_escape($currdecimals); ?>);
                     if (visible) {
-                        f[pfx + '[amount]'].value = cumtax.toFixed(<?php echo js_escape($currdecimals); ?>); // requires JS 1.5
+                        f[pfx + '[amount]'].value = cumtax.toFixed(<?php echo js_escape($currdecimals); ?>);
                     }
                     if (isNaN(tax)) {
                         alert('Tax rate not numeric at line ' + lino);
                     }
-                return tax;
-             }
-             return 0;
+                    return tax;
+                }
+                return 0;
             }
 
-            // This mess recomputes the invoice total and optionally applies a discount.
             function computeDiscountedTotals(discount, visible) {
                 clearTax(visible);
                 var f = document.forms[0];
                 var total = 0.00;
                 for (var lino = 0; f['line[' + lino + '][code_type]']; ++lino) {
+                    if (f['line[' + lino + '][is_deleted]'] && f['line[' + lino + '][is_deleted]'].value === '1') {
+                        continue;
+                    }
                     var code_type = f['line[' + lino + '][code_type]'].value;
-                    // price is price per unit when the form was originally generated.
-                    // By contrast, amount is the dynamically-generated discounted line total.
                     var price = parseFloat(f['line[' + lino + '][price]'].value);
                     if (isNaN(price)) {
                         alert('Price not numeric at line ' + lino);
                     }
-                    if (code_type == 'COPAY' || code_type == 'TAX') {
-                        // This works because the tax lines come last.
+                    if (code_type === 'COPAY' || code_type === 'TAX') {
                         total += parseFloat(price.toFixed(<?php echo js_escape($currdecimals); ?>));
                         continue;
                     }
@@ -894,7 +991,7 @@ function generate_receipt($patient_id, $encounter = 0): void
                         f['line[' + lino + '][amount]'].value = amount.toFixed(<?php echo js_escape($currdecimals); ?>);
                     }
                     total += amount;
-                    var taxrates  = f['line[' + lino + '][taxrates]'].value;
+                    var taxrates = f['line[' + lino + '][taxrates]'].value;
                     var taxids = taxrates.split(':');
                     for (var j = 0; j < taxids.length; ++j) {
                         addTax(taxids[j], amount, visible);
@@ -903,7 +1000,6 @@ function generate_receipt($patient_id, $encounter = 0): void
                 return total - discount;
             }
 
-            // Recompute displayed amounts with any discount applied.
             function computeTotals() {
                 var f = document.forms[0];
                 var discount = parseFloat(f.form_discount.value);
@@ -911,7 +1007,6 @@ function generate_receipt($patient_id, $encounter = 0): void
                     discount = 0;
                 }
                 <?php if (!$GLOBALS['discount_by_money']) { ?>
-                // This site discounts by percentage, so convert it to a money amount.
                 if (discount > 100) {
                     discount = 100;
                 }
@@ -922,7 +1017,341 @@ function generate_receipt($patient_id, $encounter = 0): void
                 <?php } ?>
                 var total = computeDiscountedTotals(discount, true);
                 f.form_amount.value = total.toFixed(<?php echo js_escape($currdecimals); ?>);
+                checkoutInvoiceTotal = parseFloat(total.toFixed(<?php echo js_escape($currdecimals); ?>));
+                refreshPaymentSummary();
                 return true;
+            }
+
+            function collectPayments() {
+                var rows = document.querySelectorAll('#payment-table-body tr');
+                var results = [];
+                rows.forEach(function (row) {
+                    var amountInput = row.querySelector('[data-payment-field="amount"]');
+                    if (!amountInput) {
+                        return;
+                    }
+                    var amount = parseFloat(amountInput.value);
+                    if (isNaN(amount) || amount <= 0) {
+                        return;
+                    }
+                    var method = row.querySelector('[data-payment-field="method"]');
+                    var gateway = row.querySelector('[data-payment-field="gateway"]');
+                    var reference = row.querySelector('[data-payment-field="reference"]');
+                    var installmentsInput = row.querySelector('[data-payment-field="installments"]');
+                    var installments = parseInt(installmentsInput && installmentsInput.value ? installmentsInput.value : '1', 10);
+                    if (isNaN(installments) || installments < 1) {
+                        installments = 1;
+                    }
+                    results.push({
+                        method: method ? method.value : '',
+                        gateway: gateway ? gateway.value : '',
+                        reference: reference ? reference.value : '',
+                        installments: installments,
+                        amount: parseFloat(amount.toFixed(<?php echo js_escape($currdecimals); ?>))
+                    });
+                });
+                return results;
+            }
+
+            function refreshPaymentSummary() {
+                var payments = collectPayments();
+                var totalCaptured = 0;
+                payments.forEach(function (payment) {
+                    totalCaptured += payment.amount;
+                });
+                var dueEl = document.getElementById('payment-total-due');
+                if (dueEl) {
+                    dueEl.textContent = checkoutInvoiceTotal.toFixed(<?php echo js_escape($currdecimals); ?>);
+                }
+                var capturedEl = document.getElementById('payment-total-captured');
+                if (capturedEl) {
+                    capturedEl.textContent = totalCaptured.toFixed(<?php echo js_escape($currdecimals); ?>);
+                }
+                var balance = checkoutInvoiceTotal - totalCaptured;
+                var balanceEl = document.getElementById('payment-balance');
+                if (balanceEl) {
+                    balanceEl.textContent = balance.toFixed(<?php echo js_escape($currdecimals); ?>);
+                    balanceEl.setAttribute('data-value', balance.toFixed(<?php echo js_escape($currdecimals); ?>));
+                }
+            }
+
+            function serializePayments() {
+                var payments = collectPayments();
+                var normalized = payments.map(function (payment) {
+                    return {
+                        method: payment.method,
+                        gateway: payment.gateway,
+                        reference: payment.reference,
+                        installments: payment.installments,
+                        amount: payment.amount.toFixed(<?php echo js_escape($currdecimals); ?>)
+                    };
+                });
+                var paymentsField = document.getElementById('form_payments');
+                if (paymentsField) {
+                    paymentsField.value = JSON.stringify(normalized);
+                }
+                var formMethod = document.getElementById('form_method');
+                var formSource = document.getElementById('form_source');
+                if (normalized.length > 0) {
+                    if (formMethod) {
+                        formMethod.value = normalized[0].method || '';
+                    }
+                    if (formSource) {
+                        formSource.value = normalized[0].reference || '';
+                    }
+                } else {
+                    if (formMethod) {
+                        formMethod.value = '';
+                    }
+                    if (formSource) {
+                        formSource.value = '';
+                    }
+                }
+                return normalized;
+            }
+
+            function prepareCheckout() {
+                var payload = serializePayments();
+                if (payload.length === 0) {
+                    alert('<?php echo xlt('Add at least one payment before finalizing the checkout.'); ?>');
+                    return false;
+                }
+                var balance = parseFloat(document.getElementById('payment-balance').getAttribute('data-value'));
+                if (isNaN(balance)) {
+                    balance = 0;
+                }
+                if (Math.abs(balance) > 0.009) {
+                    if (!confirm('<?php echo xlt('Payments do not match the total due. Continue anyway?'); ?>')) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            function getDefaultPaymentMethod() {
+                if (!checkoutPaymentOptions || checkoutPaymentOptions.length === 0) {
+                    return '';
+                }
+                for (var i = 0; i < checkoutPaymentOptions.length; ++i) {
+                    if (checkoutPaymentOptions[i].is_default) {
+                        return checkoutPaymentOptions[i].value;
+                    }
+                }
+                return checkoutPaymentOptions[0].value;
+            }
+
+            function addPaymentRow(payment) {
+                payment = payment || {};
+                var tbody = document.getElementById('payment-table-body');
+                if (!tbody) {
+                    return;
+                }
+                var index = checkoutPaymentIndex++;
+                var tr = document.createElement('tr');
+                tr.setAttribute('data-index', index);
+
+                var methodCell = document.createElement('td');
+                var methodSelect = document.createElement('select');
+                methodSelect.className = 'form-control';
+                methodSelect.setAttribute('data-payment-field', 'method');
+                (checkoutPaymentOptions || []).forEach(function (option) {
+                    var opt = document.createElement('option');
+                    opt.value = option.value;
+                    opt.textContent = option.label;
+                    if (payment.method && payment.method === option.value) {
+                        opt.selected = true;
+                    }
+                    methodSelect.appendChild(opt);
+                });
+                if (!methodSelect.value) {
+                    methodSelect.value = payment.method || getDefaultPaymentMethod();
+                }
+                methodCell.appendChild(methodSelect);
+                tr.appendChild(methodCell);
+
+                var gatewayCell = document.createElement('td');
+                var gatewaySelect = document.createElement('select');
+                gatewaySelect.className = 'form-control';
+                gatewaySelect.setAttribute('data-payment-field', 'gateway');
+                gatewayOptions.forEach(function (option) {
+                    var opt = document.createElement('option');
+                    opt.value = option.value;
+                    opt.textContent = option.label;
+                    if (payment.gateway && payment.gateway === option.value) {
+                        opt.selected = true;
+                    }
+                    gatewaySelect.appendChild(opt);
+                });
+                gatewayCell.appendChild(gatewaySelect);
+                tr.appendChild(gatewayCell);
+
+                var referenceCell = document.createElement('td');
+                var referenceInput = document.createElement('input');
+                referenceInput.type = 'text';
+                referenceInput.className = 'form-control';
+                referenceInput.setAttribute('data-payment-field', 'reference');
+                referenceInput.value = payment.reference || '';
+                referenceCell.appendChild(referenceInput);
+                tr.appendChild(referenceCell);
+
+                var installmentsCell = document.createElement('td');
+                var installmentsInput = document.createElement('input');
+                installmentsInput.type = 'number';
+                installmentsInput.className = 'form-control';
+                installmentsInput.min = '1';
+                installmentsInput.step = '1';
+                installmentsInput.setAttribute('data-payment-field', 'installments');
+                installmentsInput.value = payment.installments || 1;
+                installmentsInput.addEventListener('input', function () {
+                    var parsed = parseInt(this.value, 10);
+                    if (isNaN(parsed) || parsed < 1) {
+                        this.value = 1;
+                    }
+                });
+                installmentsCell.appendChild(installmentsInput);
+                tr.appendChild(installmentsCell);
+
+                var amountCell = document.createElement('td');
+                amountCell.className = 'text-right';
+                var amountInput = document.createElement('input');
+                amountInput.type = 'number';
+                amountInput.className = 'form-control text-right';
+                amountInput.min = '0';
+                amountInput.step = '0.01';
+                amountInput.setAttribute('data-payment-field', 'amount');
+                var initialAmount = payment.amount !== undefined ? parseFloat(payment.amount) : 0;
+                if (isNaN(initialAmount)) {
+                    initialAmount = 0;
+                }
+                amountInput.value = initialAmount.toFixed(<?php echo js_escape($currdecimals); ?>);
+                amountInput.addEventListener('input', refreshPaymentSummary);
+                amountCell.appendChild(amountInput);
+                tr.appendChild(amountCell);
+
+                var actionCell = document.createElement('td');
+                actionCell.className = 'text-center';
+                var removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'btn btn-link text-danger p-0';
+                removeButton.innerHTML = '&times;';
+                removeButton.setAttribute('aria-label', '<?php echo xlt('Remove payment'); ?>');
+                removeButton.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    tr.remove();
+                    refreshPaymentSummary();
+                });
+                actionCell.appendChild(removeButton);
+                tr.appendChild(actionCell);
+
+                tbody.appendChild(tr);
+                refreshPaymentSummary();
+            }
+
+            function markLineDeleted(index, row) {
+                var form = document.forms[0];
+                if (form && form['line[' + index + '][is_deleted]']) {
+                    form['line[' + index + '][is_deleted]'].value = 1;
+                }
+                if (row) {
+                    row.setAttribute('data-deleted', '1');
+                    row.style.display = 'none';
+                }
+                computeTotals();
+            }
+
+            function addKitLine(kit) {
+                if (!kit) {
+                    return;
+                }
+                var tbody = document.getElementById('checkout-lines-body');
+                if (!tbody) {
+                    return;
+                }
+                var index = checkoutNextLineIndex++;
+                var tr = document.createElement('tr');
+                tr.className = 'checkout-line';
+                tr.setAttribute('data-line-index', index);
+
+                var today = new Date();
+                var formattedDate = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+                var description = kit.label || '';
+                if (kit.items && kit.items.length) {
+                    description += ' (' + kit.items.join(', ') + ')';
+                }
+                var amount = parseFloat(kit.price || 0);
+                if (isNaN(amount)) {
+                    amount = 0;
+                }
+
+                var dateCell = document.createElement('td');
+                dateCell.textContent = formattedDate;
+                var hiddenFields = [
+                    {name: 'code_type', value: 'KIT'},
+                    {name: 'billing_code_type', value: 'CPT4'},
+                    {name: 'code', value: kit.id || ''},
+                    {name: 'id', value: ''},
+                    {name: 'description', value: description},
+                    {name: 'taxrates', value: ''},
+                    {name: 'price', value: amount.toFixed(<?php echo js_escape($currdecimals); ?>)},
+                    {name: 'units', value: 1},
+                    {name: 'is_new', value: 1},
+                    {name: 'is_deleted', value: 0}
+                ];
+                hiddenFields.forEach(function (field) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'line[' + index + '][' + field.name + ']';
+                    input.value = field.value;
+                    dateCell.appendChild(input);
+                });
+                tr.appendChild(dateCell);
+
+                var descCell = document.createElement('td');
+                descCell.textContent = description;
+                tr.appendChild(descCell);
+
+                var qtyCell = document.createElement('td');
+                qtyCell.className = 'text-right';
+                qtyCell.textContent = '1';
+                tr.appendChild(qtyCell);
+
+                var amountCellKit = document.createElement('td');
+                amountCellKit.className = 'text-right';
+                var amountInputKit = document.createElement('input');
+                amountInputKit.type = 'number';
+                amountInputKit.className = 'form-control text-right';
+                amountInputKit.step = '0.01';
+                amountInputKit.min = '0';
+                amountInputKit.name = 'line[' + index + '][amount]';
+                amountInputKit.value = amount.toFixed(<?php echo js_escape($currdecimals); ?>);
+                amountInputKit.addEventListener('input', function () {
+                    var priceField = document.forms[0]['line[' + index + '][price]'];
+                    if (priceField) {
+                        var updated = parseFloat(this.value);
+                        priceField.value = (isNaN(updated) ? 0 : updated).toFixed(<?php echo js_escape($currdecimals); ?>);
+                    }
+                    refreshPaymentSummary();
+                });
+                amountInputKit.addEventListener('change', computeTotals);
+                amountCellKit.appendChild(amountInputKit);
+                tr.appendChild(amountCellKit);
+
+                var actionCellKit = document.createElement('td');
+                actionCellKit.className = 'text-center';
+                var removeButtonKit = document.createElement('button');
+                removeButtonKit.type = 'button';
+                removeButtonKit.className = 'btn btn-link text-danger p-0';
+                removeButtonKit.innerHTML = '&times;';
+                removeButtonKit.setAttribute('aria-label', '<?php echo xlt('Remove line'); ?>');
+                removeButtonKit.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    markLineDeleted(index, tr);
+                });
+                actionCellKit.appendChild(removeButtonKit);
+                tr.appendChild(actionCellKit);
+
+                tbody.appendChild(tr);
+                computeTotals();
             }
 
             $(function () {
@@ -931,15 +1360,51 @@ function generate_receipt($patient_id, $encounter = 0): void
                    <?php $datetimepicker_showseconds = false; ?>
                    <?php $datetimepicker_formatInput = false; ?>
                    <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
-                   <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+                });
+                $('#add-payment-row').on('click', function (event) {
+                    event.preventDefault();
+                    addPaymentRow({});
+                });
+                if ($('#payment-table-body tr').length === 0) {
+                    addPaymentRow({});
+                }
+                $('.oe-kit-card').on('click', function (event) {
+                    event.preventDefault();
+                    var rawData = this.getAttribute('data-kit');
+                    var kit = null;
+                    if (rawData) {
+                        try {
+                            kit = JSON.parse(rawData);
+                        } catch (err) {
+                            kit = null;
+                        }
+                    }
+                    if (kit) {
+                        addKitLine(kit);
+                    }
                 });
             });
         </script>
+
         <style>
             @media (min-width: 992px){
                 .modal-lg {
                     width: 1000px !Important;
                 }
+            }
+            .oe-kit-card {
+                margin: 0.25rem;
+                min-width: 12rem;
+                text-align: left;
+            }
+            .oe-kit-card small {
+                white-space: normal;
+            }
+            .oe-payment-summary span {
+                font-weight: 600;
+            }
+            #payment-balance {
+                font-weight: 700;
             }
         </style>
         <title><?php echo xlt('Patient Checkout'); ?></title>
@@ -967,19 +1432,45 @@ function generate_receipt($patient_id, $encounter = 0): void
             </div>
             <div class="row">
                 <div class="col-sm-12">
-                    <form action='pos_checkout.php' method='post'>
+                    <?php if (!empty($_SESSION['checkout_error'])) { ?>
+                        <div class="alert alert-danger">
+                            <?php echo text($_SESSION['checkout_error']); unset($_SESSION['checkout_error']); ?>
+                        </div>
+                    <?php } ?>
+                    <form action='pos_checkout.php' method='post' id='checkout-form' onsubmit='return prepareCheckout();'>
                         <input type="hidden" name="csrf_token_form" value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>" />
                         <input name='form_pid' type='hidden' value='<?php echo attr($patient_id) ?>' />
+                        <input name='form_payments' type='hidden' id='form_payments' value='' />
                         <fieldset>
                             <legend><?php echo xlt('Item Details'); ?></legend>
+                            <?php if (!empty($aesthetic_kits)) { ?>
+                            <div class="oe-checkout-kit-grid mb-3">
+                                <div class="d-flex flex-wrap">
+                                    <?php foreach ($aesthetic_kits as $kit) { ?>
+                                        <button type="button" class="btn btn-outline-secondary oe-kit-card" data-kit='<?php echo attr(json_encode($kit)); ?>'>
+                                            <span class="d-block font-weight-bold"><?php echo text($kit['label']); ?></span>
+                                            <span class="d-block text-muted"><?php echo text(oeFormatMoney($kit['price'])); ?></span>
+                                            <?php if (!empty($kit['items'])) { ?>
+                                                <small class="d-block text-left"><?php echo text(implode(', ', $kit['items'])); ?></small>
+                                            <?php } ?>
+                                        </button>
+                                    <?php } ?>
+                                </div>
+                                <small class="form-text text-muted mt-2"><?php echo xlt('Use the quick selection buttons to add kits or standalone aesthetic products without an encounter.'); ?></small>
+                            </div>
+                            <?php } ?>
                             <div class="table-responsive">
-                                <table class="table">
-                                    <tr>
-                                        <td class="font-weight-bold"><?php echo xlt('Date'); ?></td>
-                                        <td class="font-weight-bold"><?php echo xlt('Description'); ?></td>
-                                        <td class="font-weight-bold text-right"><?php echo xlt('Qty'); ?></td>
-                                        <td class="font-weight-bold text-right"><?php echo xlt('Amount'); ?></td>
-                                    </tr>
+                                <table class="table" id="checkout-items-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="font-weight-bold"><?php echo xlt('Date'); ?></th>
+                                            <th class="font-weight-bold"><?php echo xlt('Description'); ?></th>
+                                            <th class="font-weight-bold text-right"><?php echo xlt('Qty'); ?></th>
+                                            <th class="font-weight-bold text-right"><?php echo xlt('Amount'); ?></th>
+                                            <th class="font-weight-bold text-center"><?php echo xlt('Actions'); ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="checkout-lines-body">
                                     <?php
                                     $inv_encounter = '';
                                     $inv_date      = '';
@@ -1124,6 +1615,7 @@ function generate_receipt($patient_id, $encounter = 0): void
                                         $inv_provider = $erow['provider_id'] + 0;
                                     }
                                     ?>
+                                    </tbody>
                                 </table>
                             </div>
                         </fieldset>
@@ -1138,40 +1630,48 @@ function generate_receipt($patient_id, $encounter = 0): void
                                 </div>
                             </div>
                             <div class="row oe-custom-line">
-                                <div class="col-3 offset-lg-3">
-                                    <label class="control-label" for="form_method"><?php echo xlt('Payment Method'); ?>:</label>
-                                </div>
-                                <div class="col-3">
-                                    <select name='form_method' id='form_method' class='form-control'>
-                                        <?php
-                                            $query1112 = "SELECT * FROM list_options where list_id=?  ORDER BY seq, title ";
-                                            $bres1112 = sqlStatement($query1112, array('payment_method'));
-                                        while ($brow1112 = sqlFetchArray($bres1112)) {
-                                            if ($brow1112['option_id'] == 'electronic' || $brow1112['option_id'] == 'bank_draft') {
-                                                continue;
-                                            }
-                                            echo "<option value='" . attr($brow1112['option_id']) . "'" .
-                                                ($brow1112['is_default'] ? ' selected' : '') . ">" . text(xl_list_label($brow1112['title'])) . "</option>";
-                                        }
-                                        ?>
-                                    </select>
+                                <div class="col-lg-6 offset-lg-3">
+                                    <div class="alert alert-info oe-payment-summary" id="payment-summary">
+                                        <div class="d-flex justify-content-between">
+                                            <span><?php echo xlt('Total Due'); ?></span>
+                                            <span id="payment-total-due">0.00</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span><?php echo xlt('Payments Captured'); ?></span>
+                                            <span id="payment-total-captured">0.00</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span><?php echo xlt('Balance After Payments'); ?></span>
+                                            <span id="payment-balance" data-value="0.00">0.00</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="row oe-custom-line">
-                                <div class="col-3 offset-lg-3">
-                                    <label class="control-label" for="form_source"><?php echo xlt('Check/Reference Number'); ?>:</label>
-                                </div>
-                                <div class="col-3">
-                                    <input name='form_source' id='form_source' class= 'form-control' type='text' value='' />
-                                </div>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm" id="checkout-payments-table">
+                                    <thead>
+                                        <tr>
+                                            <th><?php echo xlt('Method'); ?></th>
+                                            <th><?php echo xlt('Gateway'); ?></th>
+                                            <th><?php echo xlt('Reference'); ?></th>
+                                            <th><?php echo xlt('Installments'); ?></th>
+                                            <th class="text-right"><?php echo xlt('Amount'); ?></th>
+                                            <th class="text-center"><?php echo xlt('Actions'); ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="payment-table-body"></tbody>
+                                </table>
                             </div>
                             <div class="row oe-custom-line">
-                                <div class="col-3 offset-lg-3">
-                                    <label class="control-label" for="form_amount"><?php echo xlt('Amount Paid'); ?>:</label>
+                                <div class="col-12 text-center">
+                                    <button type="button" class="btn btn-secondary" id="add-payment-row"><?php echo xlt('Add Payment Method'); ?></button>
+                                    <small class="form-text text-muted"><?php echo xlt('Combine cash, PIX and card payments, allocating installments when applicable.'); ?></small>
                                 </div>
-                                <div class="col-3">
-                                    <input name='form_amount' id='form_amount'class='form-control' type='text' value='0.00' />
-                                </div>
+                            </div>
+                            <div class="d-none">
+                                <input name='form_method' id='form_method' type='text' value='' />
+                                <input name='form_source' id='form_source' type='text' value='' />
+                                <input name='form_amount' id='form_amount' type='text' value='0.00' />
                             </div>
                             <div class="row oe-custom-line">
                                 <div class="col-3 offset-lg-3">
