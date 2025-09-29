@@ -172,6 +172,7 @@ function fetchEvents($from_date, $to_date, $where_param = null, $orderby_param =
         "p.hipaa_allowsms, p.phone_home, p.phone_cell, p.hipaa_voice, p.hipaa_allowemail, p.email, " .
         "u.fname AS ufname, u.mname AS umname, u.lname AS ulname, u.id AS uprovider_id, " .
         "f.name, " .
+        "resource_summary.room_resource_names, resource_summary.room_resource_ids, resource_summary.resource_names, resource_summary.resource_ids, " .
         "$tracker_fields" .
         "c.pc_catname, c.pc_catid, e.pc_facility " .
         "FROM openemr_postcalendar_events AS e " .
@@ -180,6 +181,16 @@ function fetchEvents($from_date, $to_date, $where_param = null, $orderby_param =
         "LEFT OUTER JOIN patient_data AS p ON p.pid = e.pc_pid " .
         "LEFT OUTER JOIN users AS u ON u.id = e.pc_aid " .
         "LEFT OUTER JOIN openemr_postcalendar_categories AS c ON c.pc_catid = e.pc_catid " .
+        "LEFT OUTER JOIN (" .
+            "SELECT erl.event_id, " .
+                "GROUP_CONCAT(DISTINCT CASE WHEN sr.resource_type = 'room' THEN sr.name END) AS room_resource_names, " .
+                "GROUP_CONCAT(DISTINCT CASE WHEN sr.resource_type = 'room' THEN sr.id END) AS room_resource_ids, " .
+                "GROUP_CONCAT(DISTINCT CASE WHEN sr.resource_type <> 'room' THEN sr.name END) AS resource_names, " .
+                "GROUP_CONCAT(DISTINCT CASE WHEN sr.resource_type <> 'room' THEN sr.id END) AS resource_ids " .
+            "FROM event_resource_link AS erl " .
+            "INNER JOIN scheduler_resources AS sr ON sr.id = erl.resource_id " .
+            "GROUP BY erl.event_id" .
+        ") AS resource_summary ON resource_summary.event_id = e.pc_eid " .
         "WHERE $where " .
         "ORDER BY $order_by";
     }
@@ -201,6 +212,34 @@ function fetchEvents($from_date, $to_date, $where_param = null, $orderby_param =
     }
 
     while ($event = sqlFetchArray($res)) {
+        if (!empty($event['resource_names'])) {
+            $event['resource_list'] = array_filter(array_map('trim', explode(',', $event['resource_names'])));
+        } else {
+            $event['resource_list'] = [];
+        }
+
+        if (!empty($event['resource_ids'])) {
+            $event['resource_id_list'] = array_filter(array_map('intval', explode(',', $event['resource_ids'])));
+        } else {
+            $event['resource_id_list'] = [];
+        }
+
+        if (!empty($event['room_resource_names'])) {
+            $event['room_resource_list'] = array_filter(array_map('trim', explode(',', $event['room_resource_names'])));
+        } else {
+            $event['room_resource_list'] = [];
+        }
+
+        if (!empty($event['room_resource_ids'])) {
+            $event['room_resource_id_list'] = array_filter(array_map('intval', explode(',', $event['room_resource_ids'])));
+        } else {
+            $event['room_resource_id_list'] = [];
+        }
+
+        if (!empty($event['room_resource_list'])) {
+            $event['pc_room'] = $event['room_resource_list'][0];
+        }
+
         ///////
         if ($nextX) {
             $stopDate = $event['pc_endDate'];
@@ -370,7 +409,7 @@ function fetchAllEvents($from_date, $to_date, $provider_id = null, $facility_id 
 }
 
 //Support for therapy group appointments added by shachar z.
-function fetchAppointments($from_date, $to_date, $patient_id = null, $provider_id = null, $facility_id = null, $pc_appstatus = null, $with_out_provider = null, $with_out_facility = null, $pc_catid = null, $tracker_board = false, $nextX = 0, $group_id = null, $patient_name = null)
+function fetchAppointments($from_date, $to_date, $patient_id = null, $provider_id = null, $facility_id = null, $pc_appstatus = null, $with_out_provider = null, $with_out_facility = null, $pc_catid = null, $tracker_board = false, $nextX = 0, $group_id = null, $patient_name = null, $resource_ids = null)
 {
     $sqlBindArray = array();
 
@@ -425,6 +464,15 @@ function fetchAppointments($from_date, $to_date, $patient_id = null, $provider_i
     if ($patient_name != null) {
         $where .= " AND (p.fname LIKE CONCAT('%',?,'%') OR p.lname LIKE CONCAT('%',?,'%'))";
         array_push($sqlBindArray, $patient_name, $patient_name);
+    }
+
+    if (!empty($resource_ids)) {
+        $resourceFilter = is_array($resource_ids) ? array_filter(array_map('intval', $resource_ids)) : [(int)$resource_ids];
+        if (!empty($resourceFilter)) {
+            $placeholders = implode(',', array_fill(0, count($resourceFilter), '?'));
+            $where .= " AND EXISTS (SELECT 1 FROM event_resource_link AS erlf WHERE erlf.event_id = e.pc_eid AND erlf.resource_id IN ($placeholders))";
+            $sqlBindArray = array_merge($sqlBindArray, $resourceFilter);
+        }
     }
 
     //Without Provider checking

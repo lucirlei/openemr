@@ -15,6 +15,8 @@
 require_once(__DIR__ . '/calendar.inc.php');
 require_once(__DIR__ . '/patient_tracker.inc.php');
 
+use OpenEMR\Services\AppointmentService;
+
 //===============================================================================
 //This section handles the events of payment screen.
 //===============================================================================
@@ -370,6 +372,8 @@ function InsertEvent($args, $from = 'general')
             $args['locationspec'],(int)$args['facility'],(int)$args['billing_facility'],$form_room)
         );
 
+        sync_event_resources($pc_eid, $args);
+
             //Manage tracker status.
         if (!empty($form_pid)) {
             manage_tracker_status($args['event_date'], $args['starttime'], $pc_eid, $form_pid, $_SESSION['authUser'], $args['form_apptstatus'], $args['form_room']);
@@ -379,7 +383,7 @@ function InsertEvent($args, $from = 'general')
 
             return $pc_eid;
     } elseif ($from == 'payment') {
-        sqlStatement(
+        $paymentEid = sqlInsert(
             "INSERT INTO openemr_postcalendar_events ( " .
             "pc_catid, pc_multiple, pc_aid, pc_pid, pc_title, pc_time, " .
             "pc_eventDate, pc_endDate, pc_duration, pc_recurrtype, " .
@@ -394,7 +398,45 @@ function InsertEvent($args, $from = 'general')
             (int)$args['facility'],
             (int)$args['billing_facility'])
         );
+        sync_event_resources($paymentEid, $args);
     }
+}
+
+/**
+ * Persist scheduler resources for the given appointment event.
+ *
+ * @param int $eventId
+ * @param array $args
+ * @return void
+ */
+function sync_event_resources($eventId, $args): void
+{
+    if (empty($eventId)) {
+        return;
+    }
+
+    $resourceIds = [];
+
+    if (!empty($args['form_resources'])) {
+        $selected = is_array($args['form_resources']) ? $args['form_resources'] : [$args['form_resources']];
+        foreach ($selected as $resourceId) {
+            $resourceIds[] = (int)$resourceId;
+        }
+    }
+
+    if (!empty($args['form_room_resource'])) {
+        $resourceIds[] = (int)$args['form_room_resource'];
+    }
+
+    $resourceIds = array_values(array_unique(array_filter($resourceIds)));
+
+    if (empty($resourceIds) && empty($args['form_room'])) {
+        // No resources and no explicit room, remove existing links.
+        $resourceIds = [];
+    }
+
+    $service = new AppointmentService();
+    $service->syncAppointmentResources((int)$eventId, $resourceIds);
 }
 //================================================================================================================
 /**
