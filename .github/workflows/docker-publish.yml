@@ -3,10 +3,15 @@ name: Build and Push OpenEMR Docker Image
 
 # Gatilhos (Triggers) - Quando o workflow deve rodar
 on:
+  # Roda quando houver um push no branch 'main' ou 'master'
   push:
-    branches: [ 'main' ]
+    branches: [ 'main', 'master' ]
+  
+  # Roda quando uma nova Release for criada no GitHub
   release:
     types: [ created ]
+
+  # Permite que você rode este workflow manualmente pela aba "Actions"
   workflow_dispatch:
 
 # Variáveis de ambiente para facilitar a personalização
@@ -14,7 +19,7 @@ env:
   # TODO: Troque para o seu registro. Ex: ghcr.io
   REGISTRY: docker.io
   # TODO: Troque 'seu-usuario' pelo seu nome de usuário no Docker Hub
-  IMAGE_NAME: seu-usuario/openemr
+  IMAGE_NAME: lucirleisantos/openemr
 
 # Definição dos Jobs (Tarefas)
 jobs:
@@ -61,9 +66,9 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
+          # Define o contexto como a raiz do repositório
           context: .
-          # A linha abaixo especifica o caminho exato para o Dockerfile.
-          # É redundante se o arquivo estiver na raiz, mas torna a intenção mais clara.
+          # Aponta explicitamente para o Dockerfile na raiz do contexto
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
