@@ -1,0 +1,38 @@
+version: '3.9'
+
+services:
+  crm-service:
+    extends:
+      file: docker-compose.yml
+      service: openemr
+    container_name: openemr-crm
+    environment:
+      OE_MODULE_CONTEXT: crm
+      OE_SITE: default
+    ports:
+      - "8081:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  billing-service:
+    extends:
+      file: docker-compose.yml
+      service: openemr
+    container_name: openemr-billing
+    environment:
+      OE_MODULE_CONTEXT: billing
+      OE_SITE: default
+    ports:
+      - "8082:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  logvolume01:
+    external: true
+  sitevolume:
+    external: true
+  databasevolume:
+    external: true

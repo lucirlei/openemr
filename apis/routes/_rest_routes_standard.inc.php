@@ -24,7 +24,9 @@ use OpenEMR\RestControllers\AllergyIntoleranceRestController;
 use OpenEMR\RestControllers\AppointmentRestController;
 use OpenEMR\RestControllers\ConditionRestController;
 use OpenEMR\RestControllers\DocumentRestController;
+use OpenEMR\RestControllers\BillingPlanRestController;
 use OpenEMR\RestControllers\CrmCampaignRestController;
+use OpenEMR\RestControllers\CrmSummaryRestController;
 use OpenEMR\RestControllers\CrmLeadRestController;
 use OpenEMR\RestControllers\DrugRestController;
 use OpenEMR\RestControllers\EmployerRestController;
@@ -7388,6 +7390,49 @@ return array(
 
     /**
      *  @OA\Get(
+     *      path="/api/crm",
+     *      description="Resumo de CRM com integrações de agenda e PDV",
+     *      tags={"crm"},
+     *      @OA\Parameter(
+     *          name="months",
+     *          in="query",
+     *          description="Quantidade de meses considerados nas tendências",
+     *          required=false,
+     *          @OA\Schema(type="integer", minimum=1, maximum=24)
+     *      ),
+     *      @OA\Parameter(
+     *          name="leaderboard_limit",
+     *          in="query",
+     *          description="Número de leads exibidos no ranking de fidelidade",
+     *          required=false,
+     *          @OA\Schema(type="integer", minimum=1, maximum=50)
+     *      ),
+     *      @OA\Parameter(
+     *          name="interactions_limit",
+     *          in="query",
+     *          description="Quantidade de interações recentes retornadas",
+     *          required=false,
+     *          @OA\Schema(type="integer", minimum=1, maximum=50)
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          description="Resumo consolidado",
+     *          @OA\JsonContent(ref="#/components/schemas/api_crm_summary_response")
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "GET /api/crm" => function (HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "admin", "super");
+        return (new CrmSummaryRestController())->getSummary($request);
+    },
+
+    /**
+     *  @OA\Get(
      *      path="/api/crm/leads",
      *      description="Lista todos os leads do CRM",
      *      tags={"crm"},
@@ -7616,5 +7661,48 @@ return array(
         RestConfig::request_authorization_check($request, "admin", "super");
         $data = $request->getRequestBodyJSON() ?? [];
         return (new CrmCampaignRestController())->put($uuid, $request, (array) $data);
+    },
+
+    /**
+     *  @OA\Get(
+     *      path="/api/billing/plans",
+     *      description="Lista planos de faturamento e níveis de preço",
+     *      tags={"billing"},
+     *      @OA\Parameter(
+     *          name="active",
+     *          in="query",
+     *          description="Filtra planos ativos (1) ou inativos (0)",
+     *          required=false,
+     *          @OA\Schema(type="integer", enum={0,1})
+     *      ),
+     *      @OA\Parameter(
+     *          name="search",
+     *          in="query",
+     *          description="Filtro por título ou descrição",
+     *          required=false,
+     *          @OA\Schema(type="string")
+     *      ),
+     *      @OA\Parameter(
+     *          name="limit",
+     *          in="query",
+     *          description="Limita o número de registros retornados",
+     *          required=false,
+     *          @OA\Schema(type="integer", minimum=1, maximum=200)
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          description="Coleção de planos",
+     *          @OA\JsonContent(ref="#/components/schemas/api_billing_plan_collection")
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "GET /api/billing/plans" => function (HttpRestRequest $request) {
+        RestConfig::request_authorization_check($request, "acct", "bill");
+        return (new BillingPlanRestController())->getAll($request);
     }
 );
