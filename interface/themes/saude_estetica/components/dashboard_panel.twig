@@ -1,0 +1,11 @@
+{% import 'interface/themes/saude_estetica/components/panel.twig' as se %}
+
+{{ se.panel(
+    'dashboard-panel',
+    title|default('Indicadores do dia'),
+    subtitle|default('Acompanhe métricas críticas da clínica'),
+    icon|default('/interface/themes/saude_estetica/assets/icons/dashboard.svg'),
+    'Ícone de painel do dashboard',
+    ['stats', 'timeline'],
+    actions|default([])
+) | raw }}

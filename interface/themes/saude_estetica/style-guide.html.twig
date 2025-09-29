@@ -1,0 +1,156 @@
+{% extends 'layout.html.twig' %}
+
+{% block title %}Guia de Estilos · Saúde & Estética{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <link rel="stylesheet" href="/interface/themes/saude_estetica/css/theme.css">
+{% endblock %}
+
+{% block bodyclass %}se-theme{% endblock %}
+
+{% block content %}
+<section class="container py-5">
+    <header class="text-center mb-5">
+        <span class="se-chip mb-3">Design System</span>
+        <h1 class="display-5 fw-semibold">Saúde & Estética</h1>
+        <p class="lead text-muted mx-auto" style="max-width: 720px;">Componentes pensados para clínicas de estética com foco em dashboards visuais, atendimento mobile-first e uma paleta sensorial que inspira confiança.</p>
+        <div class="d-flex justify-content-center gap-3 mt-4 flex-wrap">
+            <a href="#cores" class="btn se-gradient-button">Paleta</a>
+            <a href="#componentes" class="btn btn-outline-primary rounded-pill">Componentes</a>
+            <a href="#modo-apresentacao" class="btn btn-outline-secondary rounded-pill">Modo apresentação</a>
+        </div>
+    </header>
+
+    <section id="fundamentos" class="mb-5">
+        <div class="row g-4 align-items-center">
+            <div class="col-lg-6">
+                <h2 class="h3">Fundamentos</h2>
+                <p class="text-muted">O tema utiliza Bootstrap 5 com tokens personalizados, tipografia Poppins e componentes de painel Twig desacoplados. Os módulos JS consumem APIs REST para manter os dados sincronizados em tempo real.</p>
+                <ul class="list-unstyled d-grid gap-2">
+                    <li class="d-flex align-items-start gap-3">
+                        <span class="badge bg-primary rounded-pill">1</span>
+                        <div>
+                            <h3 class="h5 mb-1">Tokens unificados</h3>
+                            <p class="text-muted mb-0">Paleta, tipografia e espaçamentos compartilhados via CSS/Sass e arquivo JSON para handoff.</p>
+                        </div>
+                    </li>
+                    <li class="d-flex align-items-start gap-3">
+                        <span class="badge bg-primary rounded-pill">2</span>
+                        <div>
+                            <h3 class="h5 mb-1">Componentes modulares</h3>
+                            <p class="text-muted mb-0">Painéis Twig interoperáveis com frameworks SPA através de data attributes e módulos ES.</p>
+                        </div>
+                    </li>
+                    <li class="d-flex align-items-start gap-3">
+                        <span class="badge bg-primary rounded-pill">3</span>
+                        <div>
+                            <h3 class="h5 mb-1">Responsividade testada</h3>
+                            <p class="text-muted mb-0">Breakpoints otimizados para mobile/tablet com grid adaptativo e ícones leves.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <div class="se-card h-100">
+                    <h3 class="h5">Tokens Sass</h3>
+<pre class="bg-dark text-white rounded-4 p-3 mt-3 mb-0"><code>$primary: #e7338f;
+$secondary: #1f8cff;
+$accent: #ffe066;
+$font-family-base: 'Poppins', sans-serif;
+$grid-breakpoints: (sm: 480px, md: 768px, lg: 1024px);
+</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="cores" class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+            <h2 class="h3 mb-0">Paleta de cores</h2>
+            <a href="/interface/themes/saude_estetica/assets/palette.json" class="btn btn-outline-primary rounded-pill" download>Download JSON</a>
+        </div>
+        <div class="row g-4">
+            {% set palettes = {
+                'Primárias': ['#fbdde9', '#f18abc', '#e7338f', '#cf1f79'],
+                'Secundárias': ['#d8ecff', '#7cbcff', '#1f8cff', '#0854a7'],
+                'Neutras': ['#f1f3f5', '#dee2e6', '#495057', '#212529']
+            } %}
+            {% for title, colors in palettes %}
+                <div class="col-md-4">
+                    <article class="se-card h-100">
+                        <h3 class="h6 text-uppercase text-muted">{{ title }}</h3>
+                        <div class="d-flex gap-3 mt-3">
+                            {% for color in colors %}
+                                <div class="flex-fill text-center">
+                                    <div class="rounded-4" style="background: {{ color }}; height: 96px;"></div>
+                                    <small class="d-block mt-2 text-muted">{{ color }}</small>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </article>
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section id="componentes" class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+            <h2 class="h3 mb-0">Componentes principais</h2>
+            <span class="text-muted">Twig + Módulos JS (Bootstrap 5)</span>
+        </div>
+        <div class="se-panel-grid">
+            {% include 'interface/themes/saude_estetica/components/dashboard_panel.twig' %}
+            {% include 'interface/themes/saude_estetica/components/agenda_panel.twig' with {
+                title: 'Agenda interativa'
+            } %}
+            {% include 'interface/themes/saude_estetica/components/pos_panel.twig' %}
+        </div>
+    </section>
+
+    <section id="modo-apresentacao" class="mb-5">
+        <h2 class="h3">Modo apresentação</h2>
+        <p class="text-muted">Pensado para mostrar ao paciente os resultados do tratamento de forma visual. O layout utiliza cards amplos, tipografia amigável e suporta slideshows controlados por teclado.</p>
+        <div class="se-presentation" data-component="presentation-mode" data-encounter-id="demo">
+            <div class="se-presentation__header">
+                <h3 class="mb-0">Paciente em destaque</h3>
+                <p class="text-muted mb-0">Resultados do último procedimento</p>
+            </div>
+            <div class="se-presentation__content">
+                <div data-region="summary" class="w-100"></div>
+            </div>
+            <div class="se-presentation__footer">
+                <div data-region="recommendations" class="w-100"></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mb-5">
+        <h2 class="h4">Boas práticas de responsividade</h2>
+        <ul class="list-unstyled d-grid gap-3">
+            <li class="se-card">
+                <h3 class="h5">Grid fluido</h3>
+                <p class="mb-0 text-muted">Utilize `.se-panel-grid` para distribuir componentes dinamicamente e respeitar os breakpoints mobile/tablet/desktop.</p>
+            </li>
+            <li class="se-card">
+                <h3 class="h5">Tipografia escalável</h3>
+                <p class="mb-0 text-muted">Títulos usam `clamp()` nas folhas Sass para manter legibilidade em diferentes densidades de pixel.</p>
+            </li>
+            <li class="se-card">
+                <h3 class="h5">Estados de interação</h3>
+                <p class="mb-0 text-muted">Botoões com gradiente possuem foco/hover acessível e contraste AA.</p>
+            </li>
+        </ul>
+    </section>
+</section>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script type="module" src="/interface/themes/saude_estetica/js/apiClient.js"></script>
+    <script type="module" src="/interface/themes/saude_estetica/js/dashboard.js"></script>
+    <script type="module" src="/interface/themes/saude_estetica/js/agenda.js"></script>
+    <script type="module" src="/interface/themes/saude_estetica/js/pos.js"></script>
+    <script type="module" src="/interface/themes/saude_estetica/js/presentationMode.js"></script>
+{% endblock %}

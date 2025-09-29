@@ -1,0 +1,33 @@
+{% macro panel(id, title, subtitle, icon, iconAlt, bodySlots, actions=[]) %}
+<div class="se-panel" data-component="{{ id }}">
+    <header class="se-panel__header">
+        <div class="se-panel__icon">
+            {% if icon is defined and icon %}
+                <img src="{{ icon }}" alt="{{ iconAlt|default('') }}" class="img-fluid" width="40" height="40" loading="lazy">
+            {% else %}
+                <span class="fs-3">✨</span>
+            {% endif %}
+        </div>
+        <div>
+            <h3 class="se-panel__title mb-0">{{ title }}</h3>
+            {% if subtitle %}
+                <p class="se-panel__subtitle mb-0">{{ subtitle }}</p>
+            {% endif %}
+        </div>
+    </header>
+    <div class="se-panel__body">
+        {% for region in bodySlots %}
+            <div data-region="{{ region }}" class="se-panel__slot se-panel__slot--{{ region }}"></div>
+        {% endfor %}
+    </div>
+    {% if actions|length %}
+        <footer class="se-panel__footer">
+            {% for action in actions %}
+                <a href="{{ action.href }}" class="btn se-gradient-button" data-action="{{ action.id }}">{{ action.label }}</a>
+            {% endfor %}
+        </footer>
+    {% else %}
+        <footer class="se-panel__footer" data-region="actions"></footer>
+    {% endif %}
+</div>
+{% endmacro %}
