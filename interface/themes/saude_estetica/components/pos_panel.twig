@@ -1,0 +1,19 @@
+{% import 'interface/themes/saude_estetica/components/panel.twig' as se %}
+
+{% set defaultActions = [
+    {
+        'id': 'open-pos',
+        'href': '/interface/pos/index.php',
+        'label': 'Abrir POS'
+    }
+] %}
+
+{{ se.panel(
+    'pos-panel',
+    title|default('Vendas e POS'),
+    subtitle|default('Monitore vendas e produtos mais procurados'),
+    icon|default('/interface/themes/saude_estetica/assets/icons/pos.svg'),
+    'Ícone de maquininha',
+    ['metrics', 'top-products'],
+    actions|default(defaultActions)
+) | raw }}

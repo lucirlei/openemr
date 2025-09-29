@@ -1,0 +1,212 @@
+:root {
+  --se-primary-50: #fdf4f8;
+  --se-primary-100: #fbdde9;
+  --se-primary-200: #f6b8d3;
+  --se-primary-300: #f18abc;
+  --se-primary-400: #ec5da5;
+  --se-primary-500: #e7338f;
+  --se-primary-600: #cf1f79;
+  --se-secondary-100: #d8ecff;
+  --se-secondary-300: #7cbcff;
+  --se-secondary-500: #1f8cff;
+  --se-secondary-700: #0854a7;
+  --se-accent: #ffe066;
+  --se-neutral-900: #212529;
+  --se-neutral-700: #495057;
+  --se-neutral-100: #f1f3f5;
+}
+
+body.se-theme {
+  background: linear-gradient(180deg, var(--se-primary-50) 0%, #fff 40%, #fff 100%);
+  color: var(--se-neutral-900);
+  font-family: "Poppins", "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.6;
+}
+
+.se-card,
+.se-panel {
+  box-shadow: 0 20px 45px -35px rgba(12, 15, 30, 0.55);
+  border-radius: 1.25rem;
+  background: #fff;
+  border: 1px solid rgba(231, 51, 143, 0.15);
+  padding: 1.5rem;
+}
+
+.se-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  background: rgba(31, 140, 255, 0.1);
+  color: #1f8cff;
+}
+
+.se-gradient-button {
+  border-radius: 999px;
+  padding: 0.625rem 1.5rem;
+  border: none;
+  color: #fff;
+  background-image: linear-gradient(120deg, #e7338f 0%, #1f8cff 100%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.se-gradient-button:hover,
+.se-gradient-button:focus {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 30px -20px rgba(231, 51, 143, 0.65);
+}
+
+.se-panel-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .se-panel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .se-panel-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.se-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.se-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.se-panel__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: rgba(231, 51, 143, 0.08);
+  display: grid;
+  place-items: center;
+}
+
+.se-panel__title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 0.1rem;
+}
+
+.se-panel__subtitle {
+  font-size: 0.85rem;
+  color: #495057;
+}
+
+.se-panel__body {
+  flex: 1 1 auto;
+  display: grid;
+  gap: 1rem;
+}
+
+.se-panel__footer {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.se-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.se-stat__label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #495057;
+  letter-spacing: 0.06em;
+}
+
+.se-stat__value {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #e7338f;
+}
+
+.se-timeline {
+  display: grid;
+  gap: 1rem;
+  position: relative;
+  padding-left: 1.25rem;
+}
+
+.se-timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.35rem;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  width: 2px;
+  background: linear-gradient(180deg, #e7338f 0%, rgba(231, 51, 143, 0) 100%);
+}
+
+.se-timeline__item {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.se-timeline__dot {
+  position: absolute;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: #1f8cff;
+  left: -0.8rem;
+  top: 0.2rem;
+  box-shadow: 0 0 0 4px rgba(31, 140, 255, 0.12);
+}
+
+.se-presentation {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at top right, rgba(255, 224, 102, 0.22), transparent 60%), #fff;
+}
+
+.se-presentation__header {
+  padding: 2.5rem 1.5rem 1rem;
+  text-align: center;
+}
+
+.se-presentation__content {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem 3rem;
+}
+
+.se-presentation__footer {
+  padding: 1.5rem;
+  text-align: center;
+  background: rgba(231, 51, 143, 0.06);
+}
+
+@media (max-width: 480px) {
+  .se-panel__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .se-panel__footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

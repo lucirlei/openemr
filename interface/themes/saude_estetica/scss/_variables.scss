@@ -1,0 +1,52 @@
+// Paleta de cores principal do tema Saúde & Estética
+$primary: #e7338f;
+$primary-100: #fbdde9;
+$primary-200: #f6b8d3;
+$primary-300: #f18abc;
+$primary-400: #ec5da5;
+$primary-500: #e7338f;
+$primary-600: #cf1f79;
+
+$secondary: #1f8cff;
+$secondary-100: #d8ecff;
+$secondary-200: #abd5ff;
+$secondary-400: #4ea4ff;
+
+$accent: #ffe066;
+$neutral-900: #212529;
+$neutral-700: #495057;
+$neutral-300: #dee2e6;
+$neutral-100: #f1f3f5;
+
+$body-bg: #fdf4f8;
+$body-color: $neutral-900;
+$font-family-base: 'Poppins', 'Helvetica Neue', Arial, sans-serif;
+$headings-font-weight: 600;
+
+// Bootstrap custom tokens
+$btn-border-radius: 999px;
+$btn-padding-y: .625rem;
+$btn-padding-x: 1.5rem;
+$card-border-radius: 1.25rem;
+$card-box-shadow: 0 20px 45px -35px rgba(12, 15, 30, .55);
+$input-border-radius: .9rem;
+
+$enable-gradients: true;
+$enable-rounded: true;
+
+$grid-breakpoints: (
+  xs: 0,
+  sm: 480px,
+  md: 768px,
+  lg: 1024px,
+  xl: 1280px,
+  xxl: 1440px
+);
+
+$container-max-widths: (
+  sm: 440px,
+  md: 720px,
+  lg: 960px,
+  xl: 1180px,
+  xxl: 1360px
+);

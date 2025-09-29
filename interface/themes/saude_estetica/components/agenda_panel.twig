@@ -1,0 +1,19 @@
+{% import 'interface/themes/saude_estetica/components/panel.twig' as se %}
+
+{% set defaultActions = [
+    {
+        'id': 'open-schedule',
+        'href': '/interface/main/calendar/index.php',
+        'label': 'Ir para agenda'
+    }
+] %}
+
+{{ se.panel(
+    'agenda-panel',
+    title|default('Agenda do dia'),
+    subtitle|default('Visualize pacientes e procedimentos agendados'),
+    icon|default('/interface/themes/saude_estetica/assets/icons/calendar.svg'),
+    'Ícone de calendário',
+    ['meta', 'appointments'],
+    actions|default(defaultActions)
+) | raw }}

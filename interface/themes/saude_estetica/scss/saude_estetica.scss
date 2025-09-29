@@ -1,0 +1,207 @@
+@use "../oe-bootstrap" as *; // garante compatibilidade com build existente
+@use "./variables" as *;
+
+:root {
+  --se-primary-50: #fdf4f8;
+  --se-primary-100: #fbdde9;
+  --se-primary-200: #f6b8d3;
+  --se-primary-300: #f18abc;
+  --se-primary-400: #ec5da5;
+  --se-primary-500: #e7338f;
+  --se-primary-600: #cf1f79;
+  --se-secondary-100: #d8ecff;
+  --se-secondary-300: #7cbcff;
+  --se-secondary-500: #1f8cff;
+  --se-secondary-700: #0854a7;
+  --se-accent: #ffe066;
+  --se-neutral-900: #212529;
+  --se-neutral-700: #495057;
+  --se-neutral-100: #f1f3f5;
+}
+
+body.se-theme {
+  background: linear-gradient(180deg, var(--se-primary-50) 0%, #ffffff 40%, #ffffff 100%);
+  color: var(--se-neutral-900);
+  font-family: $font-family-base;
+  line-height: 1.6;
+}
+
+.se-card {
+  @include box-shadow($card-box-shadow);
+  border-radius: $card-border-radius;
+  background: #fff;
+  border: 1px solid rgba(231, 51, 143, .15);
+  padding: 1.5rem;
+}
+
+.se-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: .35rem .8rem;
+  font-size: .75rem;
+  letter-spacing: .02em;
+  background: rgba(31, 140, 255, .1);
+  color: $secondary;
+}
+
+.se-gradient-button {
+  @include button-variant($primary, #fff);
+  background-image: linear-gradient(120deg, $primary 0%, $secondary 100%);
+  border: none;
+  transition: transform .2s ease, box-shadow .2s ease;
+
+  &:hover,
+  &:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 30px -20px rgba(231, 51, 143, .65);
+  }
+}
+
+.se-panel-grid {
+  display: grid;
+  gap: 1.5rem;
+
+  @media (min-width: map-get($grid-breakpoints, md)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (min-width: map-get($grid-breakpoints, xl)) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.se-panel {
+  @extend .se-card;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  &__icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    background: rgba(231, 51, 143, .08);
+    display: grid;
+    place-items: center;
+  }
+
+  &__title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: .1rem;
+  }
+
+  &__subtitle {
+    font-size: .85rem;
+    color: $neutral-700;
+  }
+
+  &__body {
+    flex: 1 1 auto;
+    display: grid;
+    gap: 1rem;
+  }
+
+  &__footer {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+  }
+}
+
+.se-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  &__label {
+    font-size: .8rem;
+    text-transform: uppercase;
+    color: $neutral-700;
+    letter-spacing: .06em;
+  }
+
+  &__value {
+    font-size: 2rem;
+    font-weight: 600;
+    color: $primary;
+  }
+}
+
+.se-timeline {
+  display: grid;
+  gap: 1rem;
+  position: relative;
+  padding-left: 1.25rem;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: .3rem auto .3rem .35rem;
+    width: 2px;
+    background: linear-gradient(180deg, $primary 0%, rgba(231, 51, 143, 0));
+  }
+
+  &__item {
+    position: relative;
+    padding-left: 1rem;
+  }
+
+  &__dot {
+    position: absolute;
+    width: .7rem;
+    height: .7rem;
+    border-radius: 50%;
+    background: $secondary;
+    left: -.8rem;
+    top: .2rem;
+    box-shadow: 0 0 0 4px rgba(31, 140, 255, .12);
+  }
+}
+
+.se-presentation {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at top right, rgba(255, 224, 102, .22), transparent 60%), #fff;
+
+  &__header {
+    padding: 2.5rem 1.5rem 1rem;
+    text-align: center;
+  }
+
+  &__content {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem 3rem;
+  }
+
+  &__footer {
+    padding: 1.5rem;
+    text-align: center;
+    background: rgba(231, 51, 143, .06);
+  }
+}
+
+@media (max-width: map-get($grid-breakpoints, sm)) {
+  .se-panel__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .se-panel__footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
