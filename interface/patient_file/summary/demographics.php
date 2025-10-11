@@ -614,6 +614,10 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
             placeHtml("disc_fragment.php", "disclosures_ps_expand");
             placeHtml("labdata_fragment.php", "labdata_ps_expand");
             placeHtml("track_anything_fragment.php", "track_anything_ps_expand");
+            <?php if (AclMain::aclCheckCore('patients', 'med', '', 'view')) { ?>
+            placeHtml("body_composition_view.php", "body_composition_ps_expand", true);
+            placeHtml("aesthetic_treatments.php", "aesthetic_treatments_ps_expand", true);
+            <?php } ?>
             <?php if ($vitals_is_registered && AclMain::aclCheckCore('patients', 'med')) { ?>
             // Initialize the Vitals form if it is registered and user is authorized.
             placeHtml("vitals_fragment.php", "vitals_ps_expand");
@@ -1937,6 +1941,30 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                     ]);
 
                     echo "<div id=\"stats_div\"></div>";
+
+                    if (AclMain::aclCheckCore('patients', 'med', '', 'view')) {
+                        $id = "body_composition_ps_expand";
+                        $dispatchResult = $ed->dispatch(new CardRenderEvent('body_composition'), CardRenderEvent::EVENT_HANDLE);
+                        echo $twig->getTwig()->render('patient/card/loader.html.twig', [
+                            'title' => xl("Body Composition"),
+                            'id' => $id,
+                            'initiallyCollapsed' => (getUserSetting($id) == 0) ? true : false,
+                            'auth' => false,
+                            'prependedInjection' => $dispatchResult->getPrependedInjection(),
+                            'appendedInjection' => $dispatchResult->getAppendedInjection(),
+                        ]);
+
+                        $id = "aesthetic_treatments_ps_expand";
+                        $dispatchResult = $ed->dispatch(new CardRenderEvent('aesthetic_treatments'), CardRenderEvent::EVENT_HANDLE);
+                        echo $twig->getTwig()->render('patient/card/loader.html.twig', [
+                            'title' => xl("Aesthetic Treatments"),
+                            'id' => $id,
+                            'initiallyCollapsed' => (getUserSetting($id) == 0) ? true : false,
+                            'auth' => false,
+                            'prependedInjection' => $dispatchResult->getPrependedInjection(),
+                            'appendedInjection' => $dispatchResult->getAppendedInjection(),
+                        ]);
+                    }
 
                     // TRACK ANYTHING
                     // Determine if track_anything form is in use for this site.

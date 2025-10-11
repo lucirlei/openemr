@@ -459,6 +459,9 @@ $twig = (new TwigContainer(null, $GLOBALS['kernel']))->getTwig();
                     </div>
                 </form>
             <?php endif; ?>
+            <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="launchConsentForms();">
+                <?php echo xlt('Consent Forms'); ?>
+            </button>
             <!--Below is the user data section that contains the user information and the attendant data-->
             <span id="userData" data-bind="template: {name: 'user-data-template', data: application_data}"></span>
             <?php
@@ -501,6 +504,15 @@ $twig = (new TwigContainer(null, $GLOBALS['kernel']))->getTwig();
             }
         });
         document.addEventListener('touchstart', {}); //specifically added for iOS devices, especially in iframes
+        function launchConsentForms() {
+            getSessionValue('pid').then(function (pid) {
+                if (!pid) {
+                    alert('<?php echo xlt('Please select a patient before opening consent forms.'); ?>');
+                    return;
+                }
+                dlgopen(webroot_url + '/interface/forms/consent_forms/index.php?pid=' + encodeURIComponent(pid), '_blank', 1000, 700, '', '', {allowResize: true, allowMaximize: true});
+            });
+        }
         <?php if (($_ENV['OPENEMR__NO_BACKGROUND_TASKS'] ?? 'false') !== 'true') { ?>
         $(function () {
             goRepeaterServices();

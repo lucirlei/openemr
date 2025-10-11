@@ -466,6 +466,14 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
         // ====================================
         // multiple providers
         // ====================================
+        $procedureTypeValue = 'NULL';
+        if (!empty($_POST['procedure_type_id'])) {
+            $procedureTypeValue = "'" . add_escape_custom((int)$_POST['procedure_type_id']) . "'";
+        }
+        $equipmentValue = 'NULL';
+        if (!empty($_POST['equipment_id'])) {
+            $equipmentValue = "'" . add_escape_custom((int)$_POST['equipment_id']) . "'";
+        }
         if ($GLOBALS['select_multi_providers'] && $row['pc_multiple']) {
             // obtain current list of providers regarding the multiple key
             $up = sqlStatement("SELECT pc_aid FROM openemr_postcalendar_events WHERE pc_multiple=?", [$row['pc_multiple']]);
@@ -633,6 +641,8 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
                     "pc_apptstatus = '" . add_escape_custom($_POST['form_apptstatus']) . "', "  .
                     "pc_prefcatid = '" . add_escape_custom($_POST['form_prefcat']) . "' ,"  .
                     "pc_facility = '" . add_escape_custom((int)$_POST['facility']) . "' ,"  . // FF stuff
+                    "procedure_type_id = " . $procedureTypeValue . ", "  .
+                    "equipment_id = " . $equipmentValue . ", "  .
                     "pc_billing_location = '" . add_escape_custom((int)$_POST['billing_facility']) . "' "  .
                     "WHERE pc_aid = '" . add_escape_custom($provider) . "' AND pc_multiple = '" . add_escape_custom($row['pc_multiple'])  . "'");
                 } // foreach
@@ -729,6 +739,8 @@ if (!empty($_POST['form_action']) && ($_POST['form_action'] == "save")) {
                 "pc_apptstatus = '" . add_escape_custom($_POST['form_apptstatus']) . "', "  .
                 "pc_prefcatid = '" . add_escape_custom($_POST['form_prefcat']) . "' ,"  .
                 "pc_facility = '" . add_escape_custom((int)$_POST['facility']) . "' ,"  . // FF stuff
+                "procedure_type_id = " . $procedureTypeValue . ", "  .
+                "equipment_id = " . $equipmentValue . ", "  .
                 "pc_billing_location = '" . add_escape_custom((int)$_POST['billing_facility']) . "' "  .
                 "WHERE pc_eid = '" . add_escape_custom($eid) . "'");
             }
@@ -817,6 +829,19 @@ if (!empty($_REQUEST['groupid'])) {
     $groupname = null;
     $group_statuses = getGroupStatuses();
 
+    $procedureTypes = [];
+    $procRes = sqlStatement("SELECT id, name, description FROM calendar_procedure_types WHERE is_active = 1 ORDER BY name");
+    while ($procRow = sqlFetchArray($procRes)) {
+        $procedureTypes[] = $procRow;
+    }
+    $equipmentOptions = [];
+    $equipRes = sqlStatement("SELECT id, name, location FROM clinic_equipment WHERE is_active = 1 ORDER BY name");
+    while ($equipRow = sqlFetchArray($equipRes)) {
+        $equipmentOptions[] = $equipRow;
+    }
+    $selectedProcedureType = $_POST['procedure_type_id'] ?? '';
+    $selectedEquipment = $_POST['equipment_id'] ?? '';
+
  // If we are editing an existing event, then get its data.
 if ($eid) {
     // $row = sqlQuery("SELECT * FROM openemr_postcalendar_events WHERE pc_eid = $eid");
@@ -826,6 +851,12 @@ if ($eid) {
       "LEFT OUTER JOIN users AS u ON u.id = e.pc_informant " .
       "WHERE pc_eid = ?", [$eid]);
     $informant = $row['fname'] . ' ' . $row['mname'] . ' ' . $row['lname'];
+    if ($selectedProcedureType === '') {
+        $selectedProcedureType = $row['procedure_type_id'] ?? '';
+    }
+    if ($selectedEquipment === '') {
+        $selectedEquipment = $row['equipment_id'] ?? '';
+    }
 
     // instead of using the event's starting date, keep what has been provided
     // via the GET array, see the top of this file
@@ -1424,6 +1455,30 @@ $classpati = '';
         <?php
         billing_facility('billing_facility', ($row['pc_billing_location'] ?? null));
         ?>
+    </div>
+</div>
+<div class="form-row mx-2">
+    <div class="col-sm form-group">
+        <label for="procedure_type_id"><?php echo xlt('Procedure Type'); ?>:</label>
+        <select class="form-control" name="procedure_type_id" id="procedure_type_id">
+            <option value=""><?php echo xlt('None'); ?></option>
+            <?php foreach ($procedureTypes as $type) : ?>
+                <option value="<?php echo attr($type['id']); ?>"<?php echo ($selectedProcedureType !== '' && (string)$selectedProcedureType === (string)$type['id']) ? ' selected' : ''; ?>>
+                    <?php echo text($type['name']); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="col-sm form-group">
+        <label for="equipment_id"><?php echo xlt('Assigned Equipment'); ?>:</label>
+        <select class="form-control" name="equipment_id" id="equipment_id">
+            <option value=""><?php echo xlt('None'); ?></option>
+            <?php foreach ($equipmentOptions as $equipment) : ?>
+                <option value="<?php echo attr($equipment['id']); ?>"<?php echo ($selectedEquipment !== '' && (string)$selectedEquipment === (string)$equipment['id']) ? ' selected' : ''; ?>>
+                    <?php echo text($equipment['name']); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
     </div>
 </div>
 <?php
