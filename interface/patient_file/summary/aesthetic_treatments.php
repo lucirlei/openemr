@@ -8,6 +8,7 @@
 
 require_once(__DIR__ . '/../../globals.php');
 
+
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Core\Header;
@@ -17,12 +18,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !CsrfUtils::verifyCsrfToken($_POST[
     CsrfUtils::csrfNotVerified();
 }
 
+
+use OpenEMR\Common\Csrf\CsrfUtils;
+use OpenEMR\Core\Header;
+
+
 $pid = (int)($_SESSION['pid'] ?? $_GET['pid'] ?? 0);
 if (empty($pid)) {
     die(xlt('Patient not selected.'));
 }
 
+
 $canEdit = AclMain::aclCheckCore('patients', 'med', '', 'write');
+
 
 $availablePackages = [];
 $pkgSql = 'SELECT id, name, session_count FROM aesthetic_packages WHERE is_active = 1 ORDER BY name';
@@ -50,7 +58,9 @@ while ($row = sqlFetchArray($res)) {
 
 $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
 ?>
+
 <?php if (!$embedded) : ?>
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -58,13 +68,16 @@ $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
     <?php Header::setupHeader(['moment']); ?>
 </head>
 <body>
+
 <?php else : ?>
 <?php Header::setupAssets(['moment']); ?>
 <?php endif; ?>
+
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center my-2">
         <h5><?php echo xlt('Aesthetic Treatment Packages'); ?></h5>
     </div>
+
 
     <?php if ($canEdit) : ?>
         <div class="card mb-3">
@@ -104,6 +117,43 @@ $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
         </div>
     <?php endif; ?>
 
+    <div class="card mb-3">
+        <div class="card-header"><?php echo xlt('Assign Package'); ?></div>
+        <div class="card-body">
+            <?php if (empty($availablePackages)) : ?>
+                <p class="text-muted mb-0"><?php echo xlt('No active packages available. Create packages under Administration first.'); ?></p>
+            <?php else : ?>
+                <form id="assign-package-form" class="row gy-2 gx-3 align-items-end">
+                    <input type="hidden" name="csrf_token_form" value="<?php echo attr($csrfToken); ?>" />
+                    <input type="hidden" name="pid" value="<?php echo attr($pid); ?>" />
+                    <div class="col-md-4">
+                        <label for="package_id" class="form-label"><?php echo xlt('Package'); ?></label>
+                        <select id="package_id" name="package_id" class="form-select" required>
+                            <option value=""><?php echo xlt('Select'); ?></option>
+                            <?php foreach ($availablePackages as $package) : ?>
+                                <option value="<?php echo attr($package['id']); ?>">
+                                    <?php echo text($package['name']); ?> (<?php echo xlt('Sessions'); ?>: <?php echo text($package['session_count']); ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="start_date" class="form-label"><?php echo xlt('Start Date'); ?></label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" value="<?php echo attr(date('Y-m-d')); ?>" />
+                    </div>
+                    <div class="col-md-5">
+                        <label for="notes" class="form-label"><?php echo xlt('Notes'); ?></label>
+                        <input type="text" class="form-control" id="notes" name="notes" />
+                    </div>
+                    <div class="col-12 text-end">
+                        <button type="submit" class="btn btn-primary btn-sm"><?php echo xlt('Assign Package'); ?></button>
+                    </div>
+                </form>
+            <?php endif; ?>
+        </div>
+    </div>
+
+
     <?php if (empty($assignments)) : ?>
         <div class="alert alert-info"><?php echo xlt('No treatment packages have been assigned to this patient.'); ?></div>
     <?php else : ?>
@@ -127,6 +177,7 @@ $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
                             <p class="mb-1"><strong><?php echo xlt('Sessions Completed'); ?>:</strong> <?php echo text($assignment['sessions_completed']); ?> / <?php echo text($assignment['session_count']); ?></p>
                             <p class="mb-1"><strong><?php echo xlt('Remaining'); ?>:</strong> <?php echo text($assignment['remaining_sessions']); ?></p>
                             <p class="mb-1"><strong><?php echo xlt('Notes'); ?>:</strong> <?php echo nl2br(text($assignment['notes'] ?? '')); ?></p>
+
                             <?php if ($canEdit) : ?>
                                 <div class="d-flex gap-2 mt-3">
                                     <button class="btn btn-success btn-sm" onclick="logSession(<?php echo attr_js($assignment['id']); ?>);">
@@ -137,6 +188,16 @@ $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
                                     </button>
                                 </div>
                             <?php endif; ?>
+
+                            <div class="d-flex gap-2 mt-3">
+                                <button class="btn btn-success btn-sm" onclick="logSession(<?php echo attr_js($assignment['id']); ?>);">
+                                    <i class="fa fa-check"></i> <?php echo xlt('Log Session'); ?>
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="updateStatus(<?php echo attr_js($assignment['id']); ?>, '<?php echo attr_js($assignment['status']); ?>');">
+                                    <?php echo xlt('Change Status'); ?>
+                                </button>
+                            </div>
+
                         </div>
                         <div class="col-md-8">
                             <h6><?php echo xlt('Session Log'); ?></h6>
@@ -178,9 +239,11 @@ $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
     });
 
     function logSession(trackingId) {
+
         <?php if (!$canEdit) : ?>
         return;
         <?php else : ?>
+
         const note = prompt('<?php echo xlt('Enter optional session notes'); ?>');
         if (note === null) {
             return;
@@ -193,6 +256,7 @@ $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
         formData.append('session_date', new Date().toISOString().slice(0, 10));
         formData.append('action', 'log-session');
         submitPackageRequest(formData, '<?php echo xlt('Session logged.'); ?>');
+l
         <?php endif; ?>
     }
 
@@ -200,6 +264,11 @@ $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
         <?php if (!$canEdit) : ?>
         return;
         <?php else : ?>
+
+    }
+
+    function updateStatus(trackingId, currentStatus) {
+
         const status = prompt('<?php echo xlt('Enter new status (active, completed, cancelled, on_hold)'); ?>', currentStatus);
         if (!status) {
             return;
@@ -213,7 +282,9 @@ $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
         formData.append('notes', notes || '');
         formData.append('action', 'update-status');
         submitPackageRequest(formData, '<?php echo xlt('Package updated.'); ?>');
+
         <?php endif; ?>
+
     }
 
     function submitPackageRequest(formData, successMessage) {
@@ -237,7 +308,12 @@ $csrfToken = CsrfUtils::collectCsrfToken('aesthetic_packages_patient');
         });
     }
 </script>
+
 <?php if (!$embedded) : ?>
 </body>
 </html>
 <?php endif; ?>
+
+</body>
+</html>
+

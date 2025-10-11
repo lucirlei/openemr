@@ -8,6 +8,7 @@
 
 require_once(__DIR__ . '/../../globals.php');
 
+
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Core\Header;
@@ -18,12 +19,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !CsrfUtils::verifyCsrfToken($_POST[
     CsrfUtils::csrfNotVerified();
 }
 
+
+use OpenEMR\Core\Header;
+use OpenEMR\Services\DocumentService;
+
 $pid = (int)($_SESSION['pid'] ?? ($_GET['pid'] ?? 0));
 if (empty($pid)) {
     die(xlt('Patient not selected.'));
 }
 
+
 $canEdit = AclMain::aclCheckCore('patients', 'med', '', 'write');
+
 
 $documentService = new DocumentService();
 $records = [];
@@ -60,17 +67,21 @@ foreach ($records as $record) {
     $chartBodyFat[] = is_null($record['body_fat_percent']) ? null : (float)$record['body_fat_percent'];
 }
 ?>
+
 <?php if (!$embedded) : ?>
+
 <!DOCTYPE html>
 <html>
 <head>
     <title><?php echo xlt('Body Composition'); ?></title>
     <?php Header::setupHeader(['chart']); ?>
     <style>
+
 <?php else : ?>
 <?php Header::setupAssets(['chart']); ?>
 <style>
 <?php endif; ?>
+
         #body-composition-table th,
         #body-composition-table td {
             font-size: 0.9rem;
@@ -85,6 +96,7 @@ foreach ($records as $record) {
             margin-bottom: 1rem;
         }
     </style>
+
 <?php if (!$embedded) : ?>
 </head>
 <body>
@@ -97,6 +109,15 @@ foreach ($records as $record) {
                 <i class="fa fa-plus"></i> <?php echo xlt('Add Measurement'); ?>
             </button>
         <?php endif; ?>
+</head>
+<body>
+<div class="container-fluid">
+    <div class="body-composition-actions d-flex justify-content-between align-items-center">
+        <h5 class="my-2"><?php echo xlt('Body Composition Tracking'); ?></h5>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openBodyCompositionForm();">
+            <i class="fa fa-plus"></i> <?php echo xlt('Add Measurement'); ?>
+        </button>
+
     </div>
 
     <?php if (empty($records)) : ?>
@@ -139,9 +160,13 @@ foreach ($records as $record) {
                     <th><?php echo xlt('Circumferences (cm)'); ?></th>
                     <th><?php echo xlt('Notes'); ?></th>
                     <th><?php echo xlt('Media'); ?></th>
+
                     <?php if ($canEdit) : ?>
                         <th></th>
                     <?php endif; ?>
+
+                    <th></th>
+
                 </tr>
                 </thead>
                 <tbody>
@@ -183,6 +208,7 @@ foreach ($records as $record) {
                                 <span class="text-muted"><?php echo xlt('No photos'); ?></span>
                             <?php endif; ?>
                         </td>
+
                         <?php if ($canEdit) : ?>
                             <td>
                                 <button type="button" class="btn btn-link btn-sm" onclick="openBodyCompositionForm(<?php echo attr_js($record['id']); ?>);">
@@ -190,6 +216,13 @@ foreach ($records as $record) {
                                 </button>
                             </td>
                         <?php endif; ?>
+
+                        <td>
+                            <button type="button" class="btn btn-link btn-sm" onclick="openBodyCompositionForm(<?php echo attr_js($record['id']); ?>);">
+                                <?php echo xlt('Edit'); ?>
+                            </button>
+                        </td>
+
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -257,7 +290,12 @@ foreach ($records as $record) {
         });
     })();
 </script>
+
 <?php if (!$embedded) : ?>
 </body>
 </html>
 <?php endif; ?>
+
+</body>
+</html>
+
